@@ -8,7 +8,7 @@ const routes: Routes = [
   { path: 'users', loadChildren: () => import('./components/users/users.module').then(m => m.UsersModule) },
   { path: 'manager-login', loadChildren: () => import('./components/manager/manager.module').then(m => m.ManagerModule) },
   { path: 'manager', loadChildren: () => import('./components/manager/manager.module').then(m => m.ManagerModule) },
-  { path: 'employee-login', loadChildren: () => import('./components/employee/employee.module').then(m => m.EmployeeModule) },
+  { path: 'employee-login', loadChildren: () => import('./components/employee/employee-login.module').then(m => m.EmployeeLoginModule) },
   { path: 'employee', loadChildren: () => import('./components/employee/employee.module').then(m => m.EmployeeModule) },
   //{ path: 'home', loadChildren: () => import('./components/home/home.module').then(m => m.HomeModule) },
  

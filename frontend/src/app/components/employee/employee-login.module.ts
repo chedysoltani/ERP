@@ -2,21 +2,19 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { EmployeeDashboardComponent } from './employee-dashboard.component';
-
-const routes = [
-  { path: '', component: EmployeeDashboardComponent }
-];
+import { EmployeeLoginComponent } from './employee-login.component';
 
 @NgModule({
   declarations: [
-    EmployeeDashboardComponent
+    EmployeeLoginComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    RouterModule.forChild(routes)
+    RouterModule.forChild([
+      { path: '', component: EmployeeLoginComponent }
+    ])
   ]
 })
-export class EmployeeModule { }
+export class EmployeeLoginModule { }

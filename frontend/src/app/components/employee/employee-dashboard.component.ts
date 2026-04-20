@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ManagerAuthService, Employee } from '../../services/manager-auth.service';
+import { EmployeeService } from '../../services/employee.service';
 
 export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents';
 
@@ -176,7 +177,8 @@ export class EmployeeDashboardComponent implements OnInit {
 
   constructor(
     private router: Router,
-    private managerAuthService: ManagerAuthService
+    private managerAuthService: ManagerAuthService,
+    private employeeService: EmployeeService
   ) {}
 
   ngOnInit() {
@@ -197,13 +199,80 @@ export class EmployeeDashboardComponent implements OnInit {
   }
 
   loadEmployeeData() {
-    // Charger les données de l'employé
+    if (!this.currentEmployee) return;
+    
+    // Charger les données réelles depuis le backend
+    this.loadRealEmployeeData();
+  }
+
+  loadRealEmployeeData() {
+    const employeeId = this.currentEmployee?.id;
+    if (!employeeId) return;
+
+    // Charger le dashboard complet
+    this.employeeService.getEmployeeDashboard(employeeId).subscribe({
+      next: (response) => {
+        if (response.success) {
+          const data = response.data;
+          
+          // Mettre à jour les statistiques
+          this.employeeStats.tasksCompleted = data.stats.done;
+          this.employeeStats.tasksInProgress = data.stats.in_progress;
+          this.employeeStats.pendingTasks = data.stats.todo;
+          this.employeeStats.upcomingMeetings = data.upcomingMeetings.length;
+          
+          // Mettre à jour les données
+          this.myTasks = this.formatTasks(data.recentTasks);
+          this.myMeetings = this.formatMeetings(data.upcomingMeetings);
+          
+          console.log('Données employé chargées:', response);
+        }
+      },
+      error: (error) => {
+        console.error('Erreur lors du chargement des données employé:', error);
+        // En cas d'erreur, utiliser les données mockées
+        this.loadMockData();
+      }
+    });
+  }
+
+  loadMockData() {
+    // Charger les données mockées en fallback
     this.myTasks = [...this.baseTasks];
     this.myMeetings = [...this.baseMeetings];
     this.myTimesheets = [...this.baseTimesheets];
-    
-    // Charger les activités récentes
-    this.loadRecentActivities();
+    this.calculateStats();
+  }
+
+  formatTasks(tasks: any[]): DisplayTask[] {
+    return tasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }) : '',
+      progress: task.progress || 0,
+      status: task.status,
+      assignee: 'Moi',
+      tags: task.tags ? JSON.parse(task.tags) : []
+    }));
+  }
+
+  formatMeetings(meetings: any[]): DisplayMeeting[] {
+    return meetings.map(meeting => {
+      const dateTime = new Date(meeting.date_time);
+      return {
+        id: meeting.id,
+        title: meeting.title,
+        type: meeting.type,
+        date: dateTime.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }),
+        time: dateTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        duration: meeting.duration,
+        participants: ['Équipe'], // TODO: Implement participants when available
+        location: meeting.location,
+        description: meeting.description
+      };
+    });
   }
 
   loadRecentActivities() {
@@ -264,12 +333,37 @@ export class EmployeeDashboardComponent implements OnInit {
     const task = this.myTasks.find(t => t.id === taskId);
     if (task) {
       task.progress = progress;
+      
+      // Déterminer le nouveau statut
+      let newStatus = task.status;
       if (progress === 100) {
-        task.status = 'done';
+        newStatus = 'done';
       } else if (progress > 0 && task.status === 'todo') {
-        task.status = 'in_progress';
+        newStatus = 'in_progress';
       }
-      this.calculateStats();
+      
+      // Mettre à jour sur le backend
+      if (this.currentEmployee) {
+        this.employeeService.updateTaskStatus(this.currentEmployee.id, taskId, newStatus).subscribe({
+          next: (response) => {
+            if (response.success) {
+              task.status = newStatus;
+              this.calculateStats();
+              console.log('Statut de tâche mis à jour:', response);
+            }
+          },
+          error: (error) => {
+            console.error('Erreur lors de la mise à jour du statut:', error);
+            // En cas d'erreur, mettre à jour localement quand même
+            task.status = newStatus;
+            this.calculateStats();
+          }
+        });
+      } else {
+        // Fallback local si pas d'employé connecté
+        task.status = newStatus;
+        this.calculateStats();
+      }
     }
   }
 

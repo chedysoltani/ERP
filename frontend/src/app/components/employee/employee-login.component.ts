@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { ManagerAuthService, Employee } from '../../services/manager-auth.service';
+import { EmployeeAuthService, Employee } from '../../services/employee-auth.service';
 
 @Component({
   selector: 'app-employee-login',
@@ -15,15 +15,12 @@ export class EmployeeLoginComponent implements OnInit {
 
   constructor(
     private router: Router,
-    private managerAuthService: ManagerAuthService
+    private employeeAuthService: EmployeeAuthService
   ) {}
 
   ngOnInit() {
-    // Vérifier si l'employé est déjà connecté
-    const employeeData = localStorage.getItem('currentEmployee');
-    if (employeeData) {
-      this.router.navigate(['/employee']);
-    }
+    // La page de login doit toujours être accessible
+    // Pas de redirection automatique pour permettre aux utilisateurs de se reconnecter
   }
 
   login() {
@@ -35,24 +32,16 @@ export class EmployeeLoginComponent implements OnInit {
     this.isLoading = true;
     this.errorMessage = '';
 
-    // Simulation de login pour tester
-    if (this.email && this.password) {
-      const mockEmployee: Employee = {
-        id: 2,
-        nom: 'Employé',
-        prenom: 'Test',
-        email: this.email,
-        role: 'employee',
-        telephone: '0123456789',
-        date_creation: new Date().toISOString(),
-        manager_id: 1,
-        token: 'employee-token-' + Date.now()
-      };
-      
-      localStorage.setItem('currentEmployee', JSON.stringify(mockEmployee));
-      this.router.navigate(['/employee']);
-      this.isLoading = false;
-    }
+    this.employeeAuthService.login(this.email, this.password).subscribe({
+      next: (employee) => {
+        this.router.navigate(['/employee']);
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.message || 'Erreur de connexion';
+        this.isLoading = false;
+      }
+    });
   }
 
   goToManagerLogin() {
