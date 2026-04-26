@@ -83,49 +83,30 @@ export class ManagerAuthService {
   }
 
   login(email: string, password: string): Observable<Manager> {
-    // Simulation temporaire pour tester la redirection
-    if (email && password) {
-      const mockManager: Manager = {
+    // Vérifier les identifiants fixes pour le manager
+    if (email === 'sofienne.manager@sit.com.tn' && password === 'password123') {
+      const manager: Manager = {
         id: 1,
-        nom: 'Manager',
-        prenom: 'Test',
-        email: email,
+        nom: 'Sofiene',
+        prenom: 'Manager',
+        email: 'sofienne.manager@sit.com.tn',
         role: 'manager',
-        telephone: '0123456789',
-        date_creation: new Date().toISOString(),
-        token: 'mock-token-' + Date.now()
+        telephone: '+216 71 123 456',
+        date_creation: '2026-03-16T18:07:37.000Z',
+        token: 'manager-token-' + Date.now()
       };
       
-      localStorage.setItem('currentManager', JSON.stringify(mockManager));
-      this.currentManagerSubject.next(mockManager);
+      localStorage.setItem('currentManager', JSON.stringify(manager));
+      this.currentManagerSubject.next(manager);
+      console.log('Manager authentifié:', manager);
       
-      // Forcer la mise à jour de l'état
-      console.log('Manager stored in localStorage:', mockManager);
-      console.log('Is logged in after login:', this.isLoggedIn);
-      
-      return of(mockManager).pipe(delay(500));
+      return of(manager).pipe(delay(500));
+    } else {
+      // Refuser l'accès pour tous les autres
+      return throwError(() => new Error('Accès refusé. Seul le manager sofienne.manager@sit.com.tn peut accéder au dashboard.'));
     }
-
-    // Code original pour le backend
-    return this.http.post<any>(`${environment.apiUrl}/users/login`, { email, password })
-      .pipe(
-        map(response => {
-          // Vérifier si l'utilisateur est un manager
-          if (response.user && response.user.role === 'manager') {
-            // Stocker le manager et le token
-            const manager: Manager = {
-              ...response.user,
-              token: response.token
-            };
-            localStorage.setItem('currentManager', JSON.stringify(manager));
-            this.currentManagerSubject.next(manager);
-            return manager;
-          } else {
-            throw new Error('Accès réservé aux managers');
-          }
-        })
-      );
   }
+  
 
   logout(): void {
     localStorage.removeItem('currentManager');

@@ -828,9 +828,9 @@
                 required
                 class="form-select">
                 <option value="">Sélectionner une équipe</option>
-                <option value="Équipe A">Équipe A</option>
-                <option value="Équipe B">Équipe B</option>
-                <option value="Équipe C">Équipe C</option>
+                <option *ngFor="let user of allUsers" [value]="user.prenom + ' ' + user.nom">
+                  Équipe de {{ user.prenom }} {{ user.nom }}
+                </option>
               </select>
             </div>
 
@@ -1367,9 +1367,9 @@
             [(ngModel)]="newTask.assignee_id" 
             class="form-select">
             <option value="">Non assigné</option>
-            <option value="1">Jean Dupont</option>
-            <option value="2">Marie Martin</option>
-            <option value="3">Pierre Bernard</option>
+            <option *ngFor="let user of allUsers" [value]="user.id">
+              {{ user.prenom }} {{ user.nom }}
+            </option>
           </select>
         </div>
       </div>
@@ -1383,9 +1383,9 @@
             [(ngModel)]="newTask.project_id" 
             class="form-select">
             <option value="">Non assigné</option>
-            <option value="1">Formation Angular Avancé</option>
-            <option value="2">Migration Cloud Infrastructure</option>
-            <option value="3">E-learning Platform V2</option>
+            <option *ngFor="let project of recentProjects" [value]="project.id">
+              {{ project.name }}
+            </option>
           </select>
         </div>
 

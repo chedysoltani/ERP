@@ -73,7 +73,7 @@ class User {
 
   static async getByEmail(email) {
     try {
-      const query = 'SELECT * FROM users WHERE email = ? AND actif = 1';
+      const query = 'SELECT id, nom, prenom, email, telephone, role, date_creation, actif, password FROM users WHERE email = ? AND actif = 1';
       const users = await db.query(query, [email]);
       return users[0] || null;
     } catch (error) {

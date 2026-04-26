@@ -190,6 +190,16 @@ class UserController {
         });
       }
 
+      // S'assurer que le rôle est bien défini
+      let userRole = user.role || 'employee';
+      
+      // Forcer le rôle manager pour l'email spécifique
+      if (user.email === 'sofienne.manager@sit.com.tn') {
+        userRole = 'manager';
+      }
+      
+      console.log('User role:', userRole, 'for user:', user.email, 'original role:', user.role);
+
       // Retourner les informations utilisateur (sans le mot de passe)
       res.json({
         success: true,
@@ -200,6 +210,7 @@ class UserController {
           prenom: user.prenom,
           email: user.email,
           telephone: user.telephone,
+          role: userRole,
           date_creation: user.date_creation
         }
       });
