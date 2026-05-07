@@ -601,7 +601,13 @@ export class GanttPageComponent implements OnInit {
               endDate,
               projectId: project.id,
               projectStartDate: project.startDate,
-              projectEndDate: project.endDate
+              projectEndDate: project.endDate,
+              originalProgress: task.progress,
+              status: task.status,
+              calculatedProgress: task.status === 'done' ? 100 : (task.progress || 0),
+              allFields: task,
+              prototypeKeys: Object.getOwnPropertyNames(Object.getPrototypeOf(task)),
+              allKeys: Object.keys(task)
             });
             
             return {
@@ -610,9 +616,9 @@ export class GanttPageComponent implements OnInit {
               name: task.title,
               startDate: startDate,
               endDate: endDate,
-              progress: task.progress || 0,
+              progress: task.status === 'done' ? 100 : (task.progress || 0),
               status: task.status || 'todo',
-              assignee: task.assignee_name || 'Non assigné'
+              assignee: this.getAssigneeName(task)
             };
           }).filter(Boolean);
           
@@ -773,6 +779,44 @@ export class GanttPageComponent implements OnInit {
     const projectTasks = this.tasks.filter(t => t.projectId === projectId);
     const taskIndex = projectTasks.findIndex(t => t.id === taskId);
     return taskIndex;
+  }
+
+  // Méthode pour trouver le nom de l'employé assigné
+  getAssigneeName(task: any): string {
+    const possibleFields = [
+      'employee_name', 'assignee_name', 'assigned_to', 'employee', 
+      'assignee', 'user_name', 'name', 'firstName', 'lastName',
+      'fullname', 'full_name', 'employeeId', 'userId'
+    ];
+    
+    // Chercher dans les champs directs
+    for (const field of possibleFields) {
+      if (task[field] && typeof task[field] === 'string') {
+        return task[field];
+      }
+    }
+    
+    // Chercher dans les champs imbriqués
+    if (task.employee && task.employee.name) return task.employee.name;
+    if (task.assignee && task.assignee.name) return task.assignee.name;
+    if (task.user && task.user.name) return task.user.name;
+    
+    // Si on a un assignee_id, chercher le nom correspondant
+    if (task.assignee_id) {
+      console.log(`Recherche de l'employé avec ID: ${task.assignee_id}`);
+      // Pour l'instant, afficher l'ID en attendant d'implémenter la recherche
+      return `Employé #${task.assignee_id}`;
+    }
+    
+    // Chercher dans le prototype
+    const proto = Object.getPrototypeOf(task);
+    for (const field of possibleFields) {
+      if (proto[field] && typeof proto[field] === 'string') {
+        return proto[field];
+      }
+    }
+    
+    return 'Non assigné';
   }
 
   getTimelineMonths() {
