@@ -235,6 +235,9 @@ export class EmployeeDashboardComponent implements OnInit {
         this.loadMockData();
       }
     });
+
+    // Charger les timesheets séparément
+    this.loadTimesheets();
   }
 
   loadMockData() {
@@ -448,12 +451,127 @@ export class EmployeeDashboardComponent implements OnInit {
   }
 
   // Méthodes pour les timesheets
+  loadTimesheets() {
+    if (!this.currentEmployee) return;
+    
+    this.employeeService.getEmployeeTimesheets(this.currentEmployee.id).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.myTimesheets = response.data;
+          console.log('Timesheets chargés:', this.myTimesheets);
+          this.calculateStats();
+        }
+      },
+      error: (error) => {
+        console.error('Erreur lors du chargement des timesheets:', error);
+        // En cas d'erreur, utiliser les données mockées
+        this.myTimesheets = [...this.baseTimesheets];
+      }
+    });
+  }
+
   submitTimesheet(timesheetId: number) {
-    const timesheet = this.myTimesheets.find(t => t.id === timesheetId);
-    if (timesheet) {
-      timesheet.status = 'submitted';
-      alert('Timesheet soumis pour validation');
+    if (!this.currentEmployee) return;
+    
+    this.employeeService.submitTimesheet(this.currentEmployee.id, timesheetId).subscribe({
+      next: (response) => {
+        if (response.success) {
+          const timesheet = this.myTimesheets.find(t => t.id === timesheetId);
+          if (timesheet) {
+            timesheet.status = 'submitted';
+            alert('Timesheet soumis pour validation');
+          }
+        }
+      },
+      error: (error) => {
+        console.error('Erreur lors de la soumission du timesheet:', error);
+        alert('Erreur lors de la soumission du timesheet');
+      }
+    });
+  }
+
+  // Variables pour le modal de création de timesheet
+  showCreateTimesheetModal = false;
+  newTimesheet = {
+    date: '',
+    project_id: null,
+    hours: 0,
+    description: ''
+  };
+
+  // Liste des projets disponibles
+  availableProjects: any[] = [];
+
+  openCreateTimesheetModal() {
+    this.showCreateTimesheetModal = true;
+    this.resetTimesheetForm();
+    this.loadAvailableProjects();
+  }
+
+  loadAvailableProjects() {
+    if (!this.currentEmployee) return;
+    
+    this.employeeService.getEmployeeProjects(this.currentEmployee.id).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.availableProjects = response.data;
+        }
+      },
+      error: (error) => {
+        console.error('Erreur lors du chargement des projets:', error);
+        // Projets par défaut si erreur
+        this.availableProjects = [
+          { id: 1, name: 'Développement ERP' },
+          { id: 2, name: 'Site E-commerce' },
+          { id: 3, name: 'Application Mobile' }
+        ];
+      }
+    });
+  }
+
+  closeCreateTimesheetModal() {
+    this.showCreateTimesheetModal = false;
+    this.resetTimesheetForm();
+  }
+
+  resetTimesheetForm() {
+    this.newTimesheet = {
+      date: '',
+      project_id: null,
+      hours: 0,
+      description: ''
+    };
+  }
+
+  createTimesheet() {
+    if (!this.currentEmployee) return;
+    
+    if (!this.newTimesheet.date || !this.newTimesheet.hours) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
     }
+
+    const timesheetData = {
+      date: new Date(this.newTimesheet.date).toISOString().split('T')[0],
+      project_id: this.newTimesheet.project_id,
+      hours: this.newTimesheet.hours,
+      description: this.newTimesheet.description,
+      status: 'pending'
+    };
+
+    this.employeeService.createTimesheet(this.currentEmployee.id, timesheetData).subscribe({
+      next: (response) => {
+        if (response.success) {
+          alert('Timesheet créé avec succès');
+          this.closeCreateTimesheetModal();
+          this.loadTimesheets(); // Recharger la liste
+        }
+      },
+      error: (error) => {
+        console.error('Erreur lors de la création du timesheet:', error);
+        alert('Erreur lors de la création du timesheet');
+      }
+    });
   }
 
   // Méthodes utilitaires
@@ -499,5 +617,9 @@ export class EmployeeDashboardComponent implements OnInit {
   logout() {
     localStorage.removeItem('currentEmployee');
     this.router.navigate(['/employee-login']);
+  }
+
+  stopPropagation(event: Event) {
+    event.stopPropagation();
   }
 }

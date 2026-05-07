@@ -215,4 +215,237 @@ router.get('/period/manager/:managerId', async (req, res) => {
   }
 });
 
+// Obtenir les entrées de timesheet pour un employé
+router.get('/employee/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    
+    // Récupérer les timesheets de la table timesheets
+    const query = `
+      SELECT 
+        id,
+        date,
+        project_name,
+        hours_worked,
+        task_description,
+        status,
+        created_at,
+        updated_at
+      FROM timesheets
+      WHERE employee_id = ?
+      ORDER BY date DESC, created_at DESC
+    `;
+    
+    const results = await db.query(query, [employeeId]);
+    
+    // Transformer les résultats en format timesheet pour le frontend
+    const timesheetEntries = results.map(row => ({
+      id: row.id,
+      date: new Date(row.date).toLocaleDateString('fr-FR'),
+      project: row.project_name,
+      hours: row.hours_worked,
+      description: row.task_description || '',
+      status: row.status
+    }));
+    
+    res.json({
+      success: true,
+      data: timesheetEntries,
+      message: 'Timesheet employé récupéré avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération du timesheet employé:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération du timesheet employé'
+    });
+  }
+});
+
+// Créer une nouvelle entrée de timesheet pour un employé
+router.post('/employee/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { date, project_name, hours_worked, task_description, status = 'pending' } = req.body;
+    
+    // Validation des données
+    if (!date || !project_name || !hours_worked) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les champs date, project_name et hours_worked sont obligatoires'
+      });
+    }
+    
+    // Insérer le timesheet
+    const insertQuery = `
+      INSERT INTO timesheets (employee_id, date, project_name, hours_worked, task_description, status)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    
+    const result = await db.query(insertQuery, [employeeId, date, project_name, hours_worked, task_description, status]);
+    
+    res.json({
+      success: true,
+      data: {
+        id: result.insertId,
+        employee_id: employeeId,
+        date,
+        project_name,
+        hours_worked,
+        task_description,
+        status
+      },
+      message: 'Timesheet créé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la création du timesheet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création du timesheet'
+    });
+  }
+});
+
+// Mettre à jour un timesheet
+router.put('/employee/:employeeId/timesheets/:timesheetId', async (req, res) => {
+  try {
+    const { employeeId, timesheetId } = req.params;
+    const { date, project_name, hours_worked, task_description, status } = req.body;
+    
+    // Vérifier que le timesheet appartient à l'employé
+    const checkQuery = 'SELECT id FROM timesheets WHERE id = ? AND employee_id = ?';
+    const checkResult = await db.query(checkQuery, [timesheetId, employeeId]);
+    
+    if (checkResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Timesheet non trouvé ou non autorisé'
+      });
+    }
+    
+    // Mettre à jour le timesheet
+    const updateQuery = `
+      UPDATE timesheets 
+      SET date = ?, project_name = ?, hours_worked = ?, task_description = ?, status = ?
+      WHERE id = ? AND employee_id = ?
+    `;
+    
+    await db.query(updateQuery, [date, project_name, hours_worked, task_description, status, timesheetId, employeeId]);
+    
+    res.json({
+      success: true,
+      message: 'Timesheet mis à jour avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du timesheet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour du timesheet'
+    });
+  }
+});
+
+// Soumettre un timesheet pour validation
+router.put('/employee/:employeeId/timesheets/:timesheetId/submit', async (req, res) => {
+  try {
+    const { employeeId, timesheetId } = req.params;
+    
+    // Vérifier que le timesheet appartient à l'employé
+    const checkQuery = 'SELECT id FROM timesheets WHERE id = ? AND employee_id = ?';
+    const checkResult = await db.query(checkQuery, [timesheetId, employeeId]);
+    
+    if (checkResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Timesheet non trouvé ou non autorisé'
+      });
+    }
+    
+    // Mettre à jour le statut
+    const updateQuery = 'UPDATE timesheets SET status = ? WHERE id = ? AND employee_id = ?';
+    await db.query(updateQuery, ['submitted', timesheetId, employeeId]);
+    
+    res.json({
+      success: true,
+      message: 'Timesheet soumis pour validation'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la soumission du timesheet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la soumission du timesheet'
+    });
+  }
+});
+
+// Supprimer un timesheet
+router.delete('/employee/:employeeId/timesheets/:timesheetId', async (req, res) => {
+  try {
+    const { employeeId, timesheetId } = req.params;
+    
+    // Vérifier que le timesheet appartient à l'employé
+    const checkQuery = 'SELECT id FROM timesheets WHERE id = ? AND employee_id = ?';
+    const checkResult = await db.query(checkQuery, [timesheetId, employeeId]);
+    
+    if (checkResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Timesheet non trouvé ou non autorisé'
+      });
+    }
+    
+    // Supprimer le timesheet
+    await db.query('DELETE FROM timesheets WHERE id = ? AND employee_id = ?', [timesheetId, employeeId]);
+    
+    res.json({
+      success: true,
+      message: 'Timesheet supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la suppression du timesheet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression du timesheet'
+    });
+  }
+});
+
+// Route pour ajouter des données de test (à utiliser temporairement)
+router.post('/seed-test-data', async (req, res) => {
+  try {
+    const testData = [
+      [12, '2026-05-01', 'Développement ERP', 8, 'Développement module utilisateur', 'validated'],
+      [12, '2026-05-02', 'Site E-commerce', 7.5, 'Intégration panier d\'achat', 'validated'],
+      [12, '2026-05-03', 'Application Mobile', 8, 'Développement interface iOS', 'pending'],
+      [13, '2026-05-01', 'Développement ERP', 8, 'Tests unitaires module authentification', 'validated'],
+      [13, '2026-05-02', 'Site E-commerce', 6, 'Optimisation performance', 'submitted'],
+      [14, '2026-05-01', 'Application Mobile', 7, 'Développement interface Android', 'validated'],
+      [14, '2026-05-02', 'Développement ERP', 8, 'Documentation API', 'pending'],
+      [15, '2026-05-01', 'Site E-commerce', 8, 'Intégration paiement', 'validated'],
+      [15, '2026-05-02', 'Application Mobile', 7.5, 'Tests automatisés', 'submitted'],
+      [16, '2026-05-01', 'Développement ERP', 8, 'Refactoring base de données', 'validated'],
+      [16, '2026-05-02', 'Site E-commerce', 8, 'Mise en production', 'pending']
+    ];
+
+    const insertQuery = `
+      INSERT INTO timesheets (employee_id, date, project_name, hours_worked, task_description, status)
+      VALUES ?
+    `;
+
+    await db.query(insertQuery, [testData]);
+    
+    res.json({
+      success: true,
+      message: 'Données de test insérées avec succès',
+      count: testData.length
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'insertion des données de test:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'insertion des données de test'
+    });
+  }
+});
+
 module.exports = router;

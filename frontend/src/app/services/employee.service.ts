@@ -34,4 +34,29 @@ export class EmployeeService {
   updateTaskStatus(employeeId: number, taskId: number, status: string): Observable<any> {
     return this.http.put(`${this.baseUrl}/${employeeId}/tasks/${taskId}/status`, { status });
   }
+
+  // Récupérer les timesheets de l'employé
+  getEmployeeTimesheets(employeeId: number): Observable<any> {
+    return this.http.get(`${this.baseUrl}/${employeeId}/timesheets`);
+  }
+
+  // Créer un nouveau timesheet
+  createTimesheet(employeeId: number, timesheetData: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${employeeId}/timesheets`, timesheetData);
+  }
+
+  // Mettre à jour un timesheet
+  updateTimesheet(employeeId: number, timesheetId: number, timesheetData: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/${employeeId}/timesheets/${timesheetId}`, timesheetData);
+  }
+
+  // Soumettre un timesheet pour validation
+  submitTimesheet(employeeId: number, timesheetId: number): Observable<any> {
+    return this.http.put(`${this.baseUrl}/${employeeId}/timesheets/${timesheetId}/submit`, {});
+  }
+
+  // Supprimer un timesheet
+  deleteTimesheet(employeeId: number, timesheetId: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/${employeeId}/timesheets/${timesheetId}`);
+  }
 }

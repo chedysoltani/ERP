@@ -277,7 +277,7 @@
       <div class="section-header">
         <h2 class="section-title">Timesheet</h2>
         <div class="section-actions">
-          <button class="btn-primary">
+          <button class="btn-primary" (click)="openCreateTimesheetModal()">
             <i class="bi bi-plus-circle"></i>
             Ajouter Timesheet
           </button>
@@ -443,4 +443,75 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- Modal de création de timesheet -->
+<div *ngIf="showCreateTimesheetModal" class="modal-overlay" (click)="closeCreateTimesheetModal()">
+  <div class="modal-content" (click)="stopPropagation($event)">
+    <div class="modal-header">
+      <h2 class="modal-title">Ajouter un Timesheet</h2>
+      <button class="modal-close" (click)="closeCreateTimesheetModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    
+    <form class="modal-body" (ngSubmit)="createTimesheet()">
+      <div class="form-group">
+        <label for="timesheetDate">Date *</label>
+        <input 
+          type="date" 
+          id="timesheetDate" 
+          name="timesheetDate"
+          [(ngModel)]="newTimesheet.date" 
+          required>
+      </div>
+
+      <div class="form-group">
+        <label for="timesheetProject">Projet</label>
+        <select 
+          id="timesheetProject" 
+          name="timesheetProject"
+          [(ngModel)]="newTimesheet.project_id">
+          <option value="">Sélectionner un projet</option>
+          <option *ngFor="let project of availableProjects" [value]="project.id">
+            {{ project.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="timesheetHours">Heures travaillées *</label>
+        <input 
+          type="number" 
+          id="timesheetHours" 
+          name="timesheetHours"
+          [(ngModel)]="newTimesheet.hours" 
+          required
+          min="0.5"
+          max="24"
+          step="0.5"
+          placeholder="8">
+      </div>
+
+      <div class="form-group">
+        <label for="timesheetDescription">Description</label>
+        <textarea 
+          id="timesheetDescription" 
+          name="timesheetDescription"
+          [(ngModel)]="newTimesheet.description" 
+          rows="3"
+          placeholder="Description des tâches effectuées..."></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" (click)="closeCreateTimesheetModal()">
+          Annuler
+        </button>
+        <button type="submit" class="btn-primary">
+          <i class="bi bi-plus-circle"></i>
+          Créer
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
