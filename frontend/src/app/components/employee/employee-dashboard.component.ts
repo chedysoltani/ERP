@@ -60,6 +60,9 @@ export class EmployeeDashboardComponent implements OnInit {
     pendingTasks: 0
   };
 
+  /** Nombre de notifications de tâche non lues (assignations, etc.) */
+  taskNotificationCount = 0;
+
   // Données pour le dashboard
   myTasks: DisplayTask[] = [];
   myMeetings: DisplayMeeting[] = [];
@@ -245,6 +248,17 @@ export class EmployeeDashboardComponent implements OnInit {
 
     // Charger les timesheets séparément
     this.loadTimesheets();
+
+    this.employeeService.getTaskNotifications(employeeId).subscribe({
+      next: (res: any) => {
+        if (res?.success) {
+          this.taskNotificationCount = Number(res.unreadCount) || 0;
+        }
+      },
+      error: () => {
+        this.taskNotificationCount = 0;
+      }
+    });
   }
 
   loadMockData() {

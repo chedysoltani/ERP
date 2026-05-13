@@ -2,10 +2,12 @@ import { Component, HostListener, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ManagerAuthService, Manager, Project, Meeting } from '../../services/manager-auth.service';
 import { DocumentsService } from '../../services/documents.service';
+import { AnalyticsService } from '../../services/analytics.service';
+import { TaskEnhancedService } from '../../services/task-enhanced.service';
 import { Document } from '../../models/document.model';
 
 export type SectionId =
-  | 'dashboard' | 'projets' | 'taches' | 'gantt'
+  | 'dashboard' | 'projets' | 'taches' | 'gantt' | 'analytics'
   | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents';
 
 interface DisplayProject {
@@ -43,6 +45,14 @@ interface Task {
   tags: string[];
   submittedAt?: string;
   completedDate?: string;
+  project_id?: number | null;
+  assignee_id?: number | null;
+  assignments?: {
+    employee_id: number;
+    status: string;
+    employee_name?: string;
+    employee_initials?: string;
+  }[];
 }
 
 @Component({
@@ -324,6 +334,46 @@ export class ManagerDashboardComponent implements OnInit {
     });
   }
 
+  loadAnalytics(projectId?: number) {
+    if (!this.currentManager) {
+      console.error('Aucun manager connecté pour charger les analytics');
+      return;
+    }
+
+    if (projectId) {
+      // Load project-specific analytics
+      this.analyticsService.getProjectAnalytics(projectId).subscribe({
+        next: (response: any) => {
+          this.analyticsData = response.data;
+          console.log('Analytics du projet chargées:', this.analyticsData);
+        },
+        error: (error: any) => {
+          console.error('Erreur lors du chargement des analytics du projet:', error);
+        }
+      });
+    } else {
+      // Load manager-level analytics
+      this.analyticsService.getManagerAnalytics(this.currentManager.id).subscribe({
+        next: (response: any) => {
+          this.analyticsData = response.data;
+          console.log('Analytics globales chargées:', this.analyticsData);
+        },
+        error: (error: any) => {
+          console.error('Erreur lors du chargement des analytics globales:', error);
+        }
+      });
+    }
+  }
+
+  getGanttProjectName(): string {
+    const id = this.selectedProjectForAnalytics;
+    if (id == null) {
+      return 'Project';
+    }
+    const project = this.recentProjects.find(p => p.id === id);
+    return project?.name ?? 'Project';
+  }
+
   getProjectStatusLabel(status: string): string {
     const labels = {
       'active': 'Actif',
@@ -349,14 +399,29 @@ export class ManagerDashboardComponent implements OnInit {
         
         // Transformer les tâches pour l'affichage
         const transformedTasks = tasks.map((task: any) => {
+          const assignments = this.parseTaskAssignments(task);
+
           let assigneeName = 'Non assigné';
-          if (task.assignee_id) {
-            const user = this.allUsers.find(u => u.id === task.assignee_id);
+          let assigneeInitials = 'NA';
+          if (assignments.length > 0) {
+            assigneeName = assignments
+              .map((a: any) => a.employee_name || `Employé #${a.employee_id}`)
+              .join(', ');
+            assigneeInitials =
+              assignments.length === 1
+                ? (assignments[0].employee_initials || '?').toString().substring(0, 3)
+                : `${assignments.length}`;
+          } else if (task.assignee_id) {
+            const user = this.allUsers.find((u: any) => u.id === task.assignee_id);
             if (user) {
               assigneeName = `${user.prenom} ${user.nom}`;
+              assigneeInitials = assigneeName
+                .split(' ')
+                .map((n: string) => n[0])
+                .join('');
             }
           }
-          
+
           let parsedTags = [];
           try {
             if (task.tags) {
@@ -372,9 +437,11 @@ export class ManagerDashboardComponent implements OnInit {
             description: task.description,
             priority: task.priority,
             status: task.status,
+            project_id: task.project_id ?? null,
             assignee: assigneeName,
             assignee_id: task.assignee_id,
-            assigneeInitials: assigneeName !== 'Non assigné' ? assigneeName.split(' ').map(n => n[0]).join('') : 'NA',
+            assignments,
+            assigneeInitials,
             avatarColor: this.getAvatarColor(task.id),
             dueDate: task.due_date || new Date().toISOString().split('T')[0],
             progress: task.progress || 0,
@@ -473,10 +540,16 @@ export class ManagerDashboardComponent implements OnInit {
   // Les documents seront chargés depuis la base de données
   documents: Document[] = [];
 
+  // Analytics data
+  analyticsData: any = null;
+  selectedProjectForAnalytics: number | null = null;
+
   constructor(
     private managerAuthService: ManagerAuthService,
     public documentsService: DocumentsService,
-    private router: Router
+    private router: Router,
+    private analyticsService: AnalyticsService,
+    private taskEnhancedService: TaskEnhancedService
   ) {}
 
   timesheets = [
@@ -538,6 +611,7 @@ export class ManagerDashboardComponent implements OnInit {
     { id: 'reunions',     label: 'Réunions',     icon: 'bi-camera-video',   group: 'equipe',    badge: '3'  },
     { id: 'recommandations', label: 'Recommandations IA', icon: 'bi-cpu', group: 'equipe', badge: null },
     { id: 'simulateur',    label: 'Simulateur Projets', icon: 'bi-diagram-3', group: 'equipe', badge: null },
+    { id: 'analytics',     label: 'Analytics',       icon: 'bi-graph-up', group: 'principal', badge: null },
     { id: 'documents',  label: 'Documents',  icon: 'bi-folder2-open',   group: 'ressources',badge: null },
   ];
 
@@ -546,6 +620,7 @@ export class ManagerDashboardComponent implements OnInit {
     projets:      { title: 'Projets',        sub: 'Gestion des projets' },
     taches:       { title: 'Tâches',         sub: 'Kanban — To Do / In Progress / Done' },
     gantt:        { title: 'Gantt',          sub: 'Planification des projets' },
+    analytics:    { title: 'Analytics',      sub: 'KPIs et statistiques' },
     utilisateurs: { title: 'Utilisateurs',   sub: 'Gestion des rôles & permissions' },
     reunions:     { title: 'Réunions',       sub: 'Planification & notes' },
     recommandations: { title: 'Recommandations IA', sub: 'IA d\'affectation de tâches' },
@@ -558,7 +633,56 @@ export class ManagerDashboardComponent implements OnInit {
   get equipeItems()    { return this.navItems.filter(n => n.group === 'equipe'); }
   get ressourcesItems(){ return this.navItems.filter(n => n.group === 'ressources'); }
 
-  navigate(id: string) { this.activeSection = id as SectionId; }
+  navigate(id: string) {
+    this.activeSection = id as SectionId;
+
+    // Load analytics when navigating to analytics section
+    if (id === 'analytics') {
+      this.loadAnalytics();
+    }
+  }
+
+  // Helper methods for template validation
+  isCreateProjectDisabled(): boolean {
+    return this.loading || !this.newProject.name || !this.newProject.team;
+  }
+
+  isAddDocumentDisabled(): boolean {
+    return this.loading || !this.newDocData.title || !this.selectedFile || !this.newDocData.employeeId;
+  }
+
+  // Helper methods for analytics data
+  getGlobalTotalProjects(): number {
+    return this.analyticsData?.globalStats?.totalProjects ?? 0;
+  }
+
+  getGlobalCompletedTasks(): number {
+    return this.analyticsData?.globalStats?.completedTasks ?? 0;
+  }
+
+  getGlobalDelayedTasks(): number {
+    return this.analyticsData?.globalStats?.delayedTasks ?? 0;
+  }
+
+  getGlobalActualHours(): number {
+    return this.analyticsData?.globalStats?.totalActualHours ?? 0;
+  }
+
+  getProjectTotalTasks(): number {
+    return this.analyticsData?.projectStats?.total_tasks ?? 0;
+  }
+
+  getProjectCompletionPercentage(): number {
+    return this.analyticsData?.kpis?.completionPercentage ?? 0;
+  }
+
+  getProjectEstimatedHours(): number {
+    return this.analyticsData?.projectStats?.total_estimated_hours ?? 0;
+  }
+
+  getWorkloadDistributionLength(): number {
+    return this.analyticsData?.workloadDistribution?.length ?? 0;
+  }
 
   @HostListener('window:scroll', [])
   onScroll() { this.isScrolled = window.scrollY > 40; }
@@ -738,16 +862,194 @@ export class ManagerDashboardComponent implements OnInit {
   // Formulaire d'édition de tâche
   taskToEdit: any = {};
   showEditTaskModal = false;
+  editAddEmployeeId: number | null = null;
+  taskEditDependencies: any[] = [];
+  editDependsOnTaskId: number | null = null;
+  editDependencyType: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' = 'finish_to_start';
+  readonly dependencyTypeChoices: { value: 'finish_to_start' | 'start_to_start' | 'finish_to_finish'; label: string }[] = [
+    { value: 'finish_to_start', label: 'Fin → Début (FS)' },
+    { value: 'start_to_start', label: 'Début → Début (SS)' },
+    { value: 'finish_to_finish', label: 'Fin → Fin (FF)' }
+  ];
 
   editTask(task: any) {
     console.log('Modification de la tâche:', task);
     this.taskToEdit = { ...task };
+    if (!this.taskToEdit.assignments) {
+      this.taskToEdit.assignments = [];
+    }
+    if (this.taskToEdit.assignments.length === 0 && this.taskToEdit.assignee_id) {
+      const u = this.allUsers.find((x: any) => x.id === this.taskToEdit.assignee_id);
+      if (u) {
+        this.taskToEdit.assignments = [{
+          employee_id: u.id,
+          status: 'pending',
+          employee_name: `${u.prenom} ${u.nom}`,
+          employee_initials: `${(u.prenom || '')[0] || ''}${(u.nom || '')[0] || ''}`.toUpperCase()
+        }];
+      }
+    }
+    this.editAddEmployeeId = null;
+    this.editDependsOnTaskId = null;
+    this.editDependencyType = 'finish_to_start';
+    this.taskEditDependencies = [];
     this.showEditTaskModal = true;
+    this.refreshTaskEditDependencies();
   }
 
   closeEditTaskModal() {
     this.showEditTaskModal = false;
     this.taskToEdit = {};
+    this.editAddEmployeeId = null;
+    this.taskEditDependencies = [];
+    this.editDependsOnTaskId = null;
+  }
+
+  refreshTaskEditDependencies() {
+    const id = this.taskToEdit?.id;
+    if (!id) return;
+    this.taskEnhancedService.getTaskDependencies(id).subscribe({
+      next: (res: any) => {
+        this.taskEditDependencies = Array.isArray(res?.data) ? res.data : [];
+      },
+      error: () => {
+        this.taskEditDependencies = [];
+      }
+    });
+  }
+
+  getPredecessorCandidatesForEdit(): Task[] {
+    const pid = this.taskToEdit?.project_id;
+    const selfId = this.taskToEdit?.id;
+    if (pid == null || !this.tasks?.length) return [];
+    const blocked = new Set(
+      (this.taskEditDependencies || []).map((d: any) => Number(d.depends_on_task_id))
+    );
+    return this.tasks.filter(
+      (t) =>
+        t.id !== selfId &&
+        t.project_id != null &&
+        Number(t.project_id) === Number(pid) &&
+        !blocked.has(t.id)
+    );
+  }
+
+  addDependencyFromEditModal() {
+    const pred = this.editDependsOnTaskId;
+    const tid = this.taskToEdit?.id;
+    if (!pred || !tid) {
+      alert('Choisissez une tâche prédécesseur.');
+      return;
+    }
+    if (Number(pred) === Number(tid)) {
+      alert('Une tâche ne peut pas dépendre d’elle-même.');
+      return;
+    }
+    this.taskEnhancedService.addTaskDependency(tid, pred, this.editDependencyType, 0).subscribe({
+      next: () => {
+        this.editDependsOnTaskId = null;
+        this.refreshTaskEditDependencies();
+        this.loadTasksFromDatabase();
+      },
+      error: (err: any) => {
+        const msg =
+          err?.error?.message ||
+          (err?.status === 409 ? 'Cette dépendance existe déjà.' : 'Impossible d’ajouter la dépendance.');
+        alert(msg);
+      }
+    });
+  }
+
+  removeDependencyFromEditModal(dependsOnTaskId: number) {
+    const tid = this.taskToEdit?.id;
+    if (!tid) return;
+    this.taskEnhancedService.removeTaskDependency(tid, dependsOnTaskId).subscribe({
+      next: () => {
+        this.refreshTaskEditDependencies();
+        this.loadTasksFromDatabase();
+      },
+      error: () => alert('Impossible de supprimer la dépendance.')
+    });
+  }
+
+  dependencyTypeLabel(type: string): string {
+    const m: Record<string, string> = {
+      finish_to_start: 'FS',
+      start_to_start: 'SS',
+      finish_to_finish: 'FF'
+    };
+    return m[type] || type;
+  }
+
+  removeAssignmentRow(employeeId: number) {
+    if (!this.taskToEdit.assignments) return;
+    this.taskToEdit.assignments = this.taskToEdit.assignments.filter(
+      (a: any) => a.employee_id !== employeeId
+    );
+  }
+
+  addEditAssignmentFromSelect() {
+    const id = this.editAddEmployeeId;
+    if (!id || !this.taskToEdit.assignments) return;
+    if (this.taskToEdit.assignments.some((a: any) => a.employee_id === id)) {
+      alert('Cet employé est déjà dans la liste.');
+      return;
+    }
+    const u = this.allUsers.find((x: any) => x.id === id);
+    if (!u) return;
+    this.taskToEdit.assignments = [
+      ...this.taskToEdit.assignments,
+      {
+        employee_id: u.id,
+        status: 'pending',
+        employee_name: `${u.prenom} ${u.nom}`,
+        employee_initials: `${(u.prenom || '')[0] || ''}${(u.nom || '')[0] || ''}`.toUpperCase()
+      }
+    ];
+    this.editAddEmployeeId = null;
+  }
+
+  assignmentStatusLabel(status: string): string {
+    const m: Record<string, string> = {
+      pending: 'En attente',
+      in_progress: 'En cours',
+      completed: 'Terminée'
+    };
+    return m[status] || status;
+  }
+
+  getEmployeeUsers(): any[] {
+    return this.allUsers.filter((u: any) => u.role === 'employee');
+  }
+
+  toggleNewTaskAssignee(employeeId: number) {
+    if (!this.newTask.assignee_ids) {
+      this.newTask.assignee_ids = [];
+    }
+    const idx = this.newTask.assignee_ids.indexOf(employeeId);
+    if (idx >= 0) {
+      this.newTask.assignee_ids.splice(idx, 1);
+    } else {
+      this.newTask.assignee_ids.push(employeeId);
+    }
+  }
+
+  isNewTaskAssigneeSelected(employeeId: number): boolean {
+    return !!(this.newTask.assignee_ids && this.newTask.assignee_ids.includes(employeeId));
+  }
+
+  private parseTaskAssignments(task: any): any[] {
+    let raw = task.assignments;
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((a: any) => a && a.employee_id != null);
   }
 
   submitTaskEdit() {
@@ -765,15 +1067,32 @@ export class ManagerDashboardComponent implements OnInit {
       }
     }
 
-    const taskData = {
+    const assignmentRows = (this.taskToEdit.assignments || [])
+      .map((a: any) => ({
+        employee_id: Number(a.employee_id),
+        status: ['pending', 'in_progress', 'completed'].includes(a.status) ? a.status : 'pending'
+      }))
+      .filter((a: any) => !Number.isNaN(a.employee_id) && a.employee_id > 0);
+
+    const firstAssignee = assignmentRows.length ? assignmentRows[0].employee_id : null;
+
+    const taskData: any = {
       title: this.taskToEdit.title,
       description: this.taskToEdit.description || null,
       priority: this.taskToEdit.priority || 'medium',
-      assignee_id: this.taskToEdit.assignee_id || null,
+      assignee_id: firstAssignee,
       project_id: this.taskToEdit.project_id || null,
       due_date: formattedDueDate || null,
       estimated_hours: this.taskToEdit.estimated_hours || null,
-      tags: this.taskToEdit.tags && this.taskToEdit.tags.length > 0 ? JSON.stringify(this.taskToEdit.tags) : null
+      tags: (() => {
+        const t = this.taskToEdit.tags;
+        if (!t) return null;
+        if (typeof t === 'string') return t;
+        if (Array.isArray(t) && t.length > 0) return JSON.stringify(t);
+        return null;
+      })(),
+      employee_id: this.currentManager?.id,
+      assignments: assignmentRows
     };
 
     console.log('Mise à jour de la tâche:', taskData);
@@ -847,7 +1166,10 @@ export class ManagerDashboardComponent implements OnInit {
         
         // Gérer les erreurs spécifiques
         if (error.status === 400) {
-          alert('Erreur: Données invalides pour la mise à jour du statut.');
+          const msg =
+            error?.error?.message ||
+            'Données invalides pour la mise à jour du statut (dépendances ou règles métier).';
+          alert(msg);
         } else if (error.status === 401) {
           alert('Erreur: Vous n\'êtes pas autorisé à modifier cette tâche.');
         } else if (error.status === 404) {
@@ -986,11 +1308,12 @@ export class ManagerDashboardComponent implements OnInit {
     title: '',
     description: '',
     priority: 'medium',
-    assignee_id: null,
+    assignee_id: null as number | null,
+    assignee_ids: [] as number[],
     project_id: null,
     due_date: '',
     estimated_hours: 0,
-    tags: []
+    tags: [] as string[]
   };
 
   // Formulaire de création d'utilisateur
@@ -1164,6 +1487,7 @@ export class ManagerDashboardComponent implements OnInit {
       description: '',
       priority: 'medium',
       assignee_id: null,
+      assignee_ids: [],
       project_id: null,
       due_date: '',
       estimated_hours: 0,
@@ -1179,8 +1503,13 @@ export class ManagerDashboardComponent implements OnInit {
 
     const taskData = {
       ...this.newTask,
-      creator_id: this.currentManager?.id, // Ajouter le creator_id
-      assignee_id: this.newTask.assignee_id || null,
+      creator_id: this.currentManager?.id,
+      assignee_ids: this.newTask.assignee_ids && this.newTask.assignee_ids.length > 0
+        ? [...this.newTask.assignee_ids]
+        : (this.newTask.assignee_id ? [this.newTask.assignee_id] : []),
+      assignee_id: this.newTask.assignee_ids && this.newTask.assignee_ids.length > 0
+        ? this.newTask.assignee_ids[0]
+        : (this.newTask.assignee_id || null),
       project_id: this.newTask.project_id || null,
       due_date: this.newTask.due_date || null,
       estimated_hours: this.newTask.estimated_hours || null,

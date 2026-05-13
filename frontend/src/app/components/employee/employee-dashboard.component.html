@@ -9,7 +9,7 @@
       <div class="header-actions">
         <button class="btn-notification" title="Notifications">
           <i class="bi bi-bell"></i>
-          <span class="notification-badge">3</span>
+          <span class="notification-badge" *ngIf="taskNotificationCount > 0">{{ taskNotificationCount }}</span>
         </button>
         <button class="btn-profile" title="Profil">
           <i class="bi bi-person-circle"></i>

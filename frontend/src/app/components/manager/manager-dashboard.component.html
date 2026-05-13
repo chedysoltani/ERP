@@ -187,8 +187,13 @@
                   <p class="task-description">{{ task.description }}</p>
                   <div class="task-meta">
                     <span class="assignee">
-                      <i class="bi bi-person"></i>
-                      {{ task.assignee }}
+                      <i class="bi bi-people"></i>
+                      <ng-container *ngIf="task.assignments?.length; else dashSingleAssignee">
+                        <span *ngFor="let a of task.assignments" class="assign-mini" [title]="(a.employee_name || '') + ' — ' + assignmentStatusLabel(a.status)">
+                          {{ a.employee_initials || '?' }}
+                        </span>
+                      </ng-container>
+                      <ng-template #dashSingleAssignee>{{ task.assignee }}</ng-template>
                     </span>
                     <span class="due-date">
                       <i class="bi bi-calendar"></i>
@@ -396,7 +401,19 @@
                 <h4 class="task-title">{{ task.title }}</h4>
                 <p class="task-description">{{ task.description }}</p>
                 <div class="task-meta">
-                  <div class="task-assignee">
+                  <div class="task-assignees" *ngIf="task.assignments?.length">
+                    <div class="assignee-avatars">
+                      <span *ngFor="let a of task.assignments" class="avatar sm grad-{{ task.avatarColor }}"
+                            [class.assign-st-pending]="a.status === 'pending'"
+                            [class.assign-st-progress]="a.status === 'in_progress'"
+                            [class.assign-st-done]="a.status === 'completed'"
+                            [title]="(a.employee_name || '') + ' — ' + assignmentStatusLabel(a.status)">
+                        {{ a.employee_initials || '?' }}
+                      </span>
+                    </div>
+                    <span class="assignee-names">{{ task.assignee }}</span>
+                  </div>
+                  <div class="task-assignee" *ngIf="!task.assignments?.length">
                     <div class="avatar grad-{{ task.avatarColor }}">{{ task.assigneeInitials }}</div>
                     <span>{{ task.assignee }}</span>
                   </div>
@@ -446,7 +463,19 @@
                   <span class="progress-text">{{ task.progress }}%</span>
                 </div>
                 <div class="task-meta">
-                  <div class="task-assignee">
+                  <div class="task-assignees" *ngIf="task.assignments?.length">
+                    <div class="assignee-avatars">
+                      <span *ngFor="let a of task.assignments" class="avatar sm grad-{{ task.avatarColor }}"
+                            [class.assign-st-pending]="a.status === 'pending'"
+                            [class.assign-st-progress]="a.status === 'in_progress'"
+                            [class.assign-st-done]="a.status === 'completed'"
+                            [title]="(a.employee_name || '') + ' — ' + assignmentStatusLabel(a.status)">
+                        {{ a.employee_initials || '?' }}
+                      </span>
+                    </div>
+                    <span class="assignee-names">{{ task.assignee }}</span>
+                  </div>
+                  <div class="task-assignee" *ngIf="!task.assignments?.length">
                     <div class="avatar grad-{{ task.avatarColor }}">{{ task.assigneeInitials }}</div>
                     <span>{{ task.assignee }}</span>
                   </div>
@@ -482,7 +511,19 @@
                 <h4 class="task-title">{{ task.title }}</h4>
                 <p class="task-description">{{ task.description }}</p>
                 <div class="task-meta">
-                  <div class="task-assignee">
+                  <div class="task-assignees" *ngIf="task.assignments?.length">
+                    <div class="assignee-avatars">
+                      <span *ngFor="let a of task.assignments" class="avatar sm grad-{{ task.avatarColor }}"
+                            [class.assign-st-pending]="a.status === 'pending'"
+                            [class.assign-st-progress]="a.status === 'in_progress'"
+                            [class.assign-st-done]="a.status === 'completed'"
+                            [title]="(a.employee_name || '') + ' — ' + assignmentStatusLabel(a.status)">
+                        {{ a.employee_initials || '?' }}
+                      </span>
+                    </div>
+                    <span class="assignee-names">{{ task.assignee }}</span>
+                  </div>
+                  <div class="task-assignee" *ngIf="!task.assignments?.length">
                     <div class="avatar grad-{{ task.avatarColor }}">{{ task.assigneeInitials }}</div>
                     <span>{{ task.assignee }}</span>
                   </div>
@@ -500,68 +541,170 @@
         </div>
       </div>
 
-      <!-- ━━ GANTT ━━ -->
+      <!-- ━━━ GANTT ━━━ -->
       <div *ngIf="activeSection === 'gantt'" class="section fade-in">
-        <div class="gantt-link-container">
-          <div class="gantt-preview">
-            <div class="preview-header">
-              <h2 class="section-title">Diagramme de Gantt</h2>
-              <p class="preview-description">Visualisez et gérez la planification de vos projets</p>
-            </div>
-            
-            <div class="preview-content">
-              <div class="preview-stats">
-                <div class="stat-item">
-                  <div class="stat-number">{{ recentProjects.length }}</div>
-                  <div class="stat-label">Projets actifs</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-number">{{ inProgressTasks.length }}</div>
-                  <div class="stat-label">Tâches en cours</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-number">{{ getAverageProgress() }}%</div>
-                  <div class="stat-label">Progression moyenne</div>
-                </div>
-              </div>
-              
-              <div class="mini-gantt-preview">
-                <div class="mini-project">
-                  <div class="mini-project-name">Développement ERP</div>
-                  <div class="mini-progress">
-                    <div class="mini-bar" style="width: 65%; background: #7C74FF;"></div>
-                  </div>
-                </div>
-                <div class="mini-project">
-                  <div class="mini-project-name">Site E-commerce</div>
-                  <div class="mini-progress">
-                    <div class="mini-bar" style="width: 40%; background: #10B981;"></div>
-                  </div>
-                </div>
-                <div class="mini-project">
-                  <div class="mini-project-name">Application Mobile</div>
-                  <div class="mini-progress">
-                    <div class="mini-bar" style="width: 20%; background: #F59E0B;"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="preview-actions">
-              <button class="btn-primary btn-large" (click)="goToGantt()">
-                <i class="bi bi-calendar3-range"></i>
-                Ouvrir le Diagramme de Gantt
-              </button>
-              <button class="btn-secondary">
-                <i class="bi bi-info-circle"></i>
-                En savoir plus
-              </button>
-            </div>
+        <div class="gantt-section-header">
+          <h2 class="section-title">Diagramme de Gantt</h2>
+          <div class="gantt-controls">
+            <select class="project-select" [(ngModel)]="selectedProjectForAnalytics" (change)="loadAnalytics(selectedProjectForAnalytics!)">
+              <option [ngValue]="null">Tous les projets</option>
+              <option *ngFor="let project of recentProjects" [ngValue]="project.id">{{ project.name }}</option>
+            </select>
           </div>
+        </div>
+        
+        <div *ngIf="selectedProjectForAnalytics">
+          <app-enhanced-gantt 
+            [projectId]="selectedProjectForAnalytics" 
+            [projectName]="getGanttProjectName()">
+          </app-enhanced-gantt>
+        </div>
+        
+        <div *ngIf="!selectedProjectForAnalytics" class="no-selection-message">
+          <i class="bi bi-calendar3-range"></i>
+          <p>Sélectionnez un projet pour voir son diagramme de Gantt</p>
         </div>
       </div>
 
-      <!-- ━━ UTILISATEURS ━━ -->
+      <!-- ━━━ ANALYTICS ━━━ -->
+      <div *ngIf="activeSection === 'analytics'" class="section fade-in">
+        <div class="analytics-header">
+          <h2 class="section-title">Analytics & KPIs</h2>
+          <div class="analytics-controls">
+            <select class="project-select" [(ngModel)]="selectedProjectForAnalytics" (change)="loadAnalytics(selectedProjectForAnalytics!)">
+              <option [ngValue]="null">Vue Globale</option>
+              <option *ngFor="let project of recentProjects" [ngValue]="project.id">{{ project.name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div *ngIf="analyticsData" class="analytics-content">
+          <!-- Global Stats -->
+          <div *ngIf="!selectedProjectForAnalytics && analyticsData.globalStats" class="analytics-overview">
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-icon blue">
+                  <i class="bi bi-diagram-3"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getGlobalTotalProjects() }}</h3>
+                  <p class="kpi-label">Projets Totaux</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon green">
+                  <i class="bi bi-check2-circle"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getGlobalCompletedTasks() }}</h3>
+                  <p class="kpi-label">Tâches Terminées</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon orange">
+                  <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getGlobalDelayedTasks() }}</h3>
+                  <p class="kpi-label">Tâches en Retard</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon purple">
+                  <i class="bi bi-clock"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getGlobalActualHours().toFixed(1) }}h</h3>
+                  <p class="kpi-label">Heures Travaillées</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project-specific Stats -->
+          <div *ngIf="selectedProjectForAnalytics && analyticsData.projectStats" class="analytics-overview">
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-icon blue">
+                  <i class="bi bi-list-task"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getProjectTotalTasks() }}</h3>
+                  <p class="kpi-label">Tâches Totales</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon green">
+                  <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getProjectCompletionPercentage() }}%</h3>
+                  <p class="kpi-label">Complétion</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon orange">
+                  <i class="bi bi-clock-history"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getProjectEstimatedHours() }}h</h3>
+                  <p class="kpi-label">Heures Estimées</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon purple">
+                  <i class="bi bi-people"></i>
+                </div>
+                <div class="kpi-content">
+                  <h3 class="kpi-number">{{ getWorkloadDistributionLength() }}</h3>
+                  <p class="kpi-label">Employés Assignés</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Workload Distribution -->
+          <div *ngIf="analyticsData.workloadDistribution && analyticsData.workloadDistribution.length > 0" class="analytics-section">
+            <h3 class="subsection-title">Distribution de la Charge de Travail</h3>
+            <div class="workload-grid">
+              <div *ngFor="let employee of analyticsData.workloadDistribution" class="workload-card">
+                <div class="employee-avatar">{{ employee.employee_initials }}</div>
+                <div class="employee-info">
+                  <h4>{{ employee.employee_name }}</h4>
+                  <p>{{ employee.assigned_tasks }} tâches assignées</p>
+                  <div class="progress-bar">
+                    <div class="progress-fill" [style.width.%]="employee.avg_progress ?? 0"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Attention Tasks -->
+          <div *ngIf="analyticsData.attentionTasks && analyticsData.attentionTasks.length > 0" class="analytics-section">
+            <h3 class="subsection-title">Tâches Requérant une Attention</h3>
+            <div class="attention-list">
+              <div *ngFor="let task of analyticsData.attentionTasks" class="attention-item">
+                <div class="attention-icon">
+                  <i class="bi bi-exclamation-circle"></i>
+                </div>
+                <div class="attention-info">
+                  <h4>{{ task.title }}</h4>
+                  <p>{{ task.project_name }}</p>
+                  <span class="attention-reason">{{ task.is_blocked ? 'Bloquée' : 'En retard' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="!analyticsData" class="no-data-message">
+          <i class="bi bi-graph-up"></i>
+          <p>Chargement des analytics...</p>
+        </div>
+      </div>
+
+      <!-- ━━━ UTILISATEURS ━━━ -->
       <div *ngIf="activeSection === 'utilisateurs'" class="section fade-in">
         <div class="users-header">
           <div class="header-actions">
@@ -965,7 +1108,7 @@
             <button type="button" class="btn-secondary" (click)="closeCreateProjectModal()">
               Annuler
             </button>
-            <button type="button" class="btn-primary" (click)="createProject()" [disabled]="loading || !newProject.name || !newProject.team">
+            <button type="button" class="btn-primary" (click)="createProject()" [disabled]="isCreateProjectDisabled()">
               <span *ngIf="!loading">
                 <i class="bi bi-check-circle"></i>
                 Créer le projet
@@ -1182,8 +1325,6 @@
         </form>
       </div>
     </div>
-  </div>
-</div>
 
 <!-- Modal de création d'utilisateur -->
 <div *ngIf="showCreateUserModal" class="modal-overlay" (click)="closeCreateUserModal()">
@@ -1437,18 +1578,18 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <label for="taskAssignee">Assigné à</label>
-          <select 
-            id="taskAssignee" 
-            name="taskAssignee"
-            [(ngModel)]="newTask.assignee_id" 
-            class="form-select">
-            <option value="">Non assigné</option>
-            <option *ngFor="let user of allUsers" [value]="user.id">
-              {{ user.prenom }} {{ user.nom }}
-            </option>
-          </select>
+        <div class="form-group form-group-full">
+          <label>Employés assignés (plusieurs possibles)</label>
+          <div class="assignee-checkboxes">
+            <label *ngFor="let user of getEmployeeUsers()" class="assignee-check-label">
+              <input 
+                type="checkbox"
+                [checked]="isNewTaskAssigneeSelected(user.id)"
+                (change)="toggleNewTaskAssignee(user.id)">
+              <span>{{ user.prenom }} {{ user.nom }}</span>
+            </label>
+            <p *ngIf="getEmployeeUsers().length === 0" class="text-muted small">Aucun employé dans la liste utilisateurs.</p>
+          </div>
         </div>
       </div>
 
@@ -1551,19 +1692,35 @@
             <option value="high">Haute</option>
           </select>
         </div>
+      </div>
 
-        <div class="form-group">
-          <label for="editTaskAssignee">Assigné à</label>
-          <select 
-            id="editTaskAssignee" 
-            name="editTaskAssignee"
-            [(ngModel)]="taskToEdit.assignee_id" 
-            class="form-select">
-            <option value="">Non assigné</option>
-            <option value="1">Jean Dupont</option>
-            <option value="2">Marie Martin</option>
-            <option value="3">Pierre Bernard</option>
+      <div class="form-group">
+        <label>Équipe assignée</label>
+        <p class="field-hint">Statut individuel par employé. Les nouveaux assignés reçoivent une notification.</p>
+        <div class="assignment-edit-list" *ngIf="taskToEdit.assignments?.length; else noAssignees">
+          <div class="assignment-edit-row" *ngFor="let a of taskToEdit.assignments">
+            <span class="assignment-name">{{ a.employee_name || ('#' + a.employee_id) }}</span>
+            <select [(ngModel)]="a.status" [name]="'asst-' + a.employee_id" class="form-select form-select-sm">
+              <option value="pending">En attente</option>
+              <option value="in_progress">En cours</option>
+              <option value="completed">Terminée</option>
+            </select>
+            <button type="button" class="btn-icon danger" (click)="removeAssignmentRow(a.employee_id)" title="Retirer">
+              <i class="bi bi-person-dash"></i>
+            </button>
+          </div>
+        </div>
+        <ng-template #noAssignees>
+          <p class="text-muted small">Aucun employé assigné.</p>
+        </ng-template>
+        <div class="form-row add-assignee-row">
+          <select class="form-select" [(ngModel)]="editAddEmployeeId" name="editAddEmployee">
+            <option [ngValue]="null">Ajouter un employé…</option>
+            <option *ngFor="let user of getEmployeeUsers()" [ngValue]="user.id">
+              {{ user.prenom }} {{ user.nom }}
+            </option>
           </select>
+          <button type="button" class="btn-secondary" (click)="addEditAssignmentFromSelect()">Ajouter</button>
         </div>
       </div>
 
@@ -1575,10 +1732,10 @@
             name="editTaskProject"
             [(ngModel)]="taskToEdit.project_id" 
             class="form-select">
-            <option value="">Non assigné</option>
-            <option value="1">Formation Angular Avancé</option>
-            <option value="2">Migration Cloud Infrastructure</option>
-            <option value="3">E-learning Platform V2</option>
+            <option [ngValue]="null">Non assigné</option>
+            <option *ngFor="let project of recentProjects" [ngValue]="project.id">
+              {{ project.name }}
+            </option>
           </select>
         </div>
 
@@ -1604,6 +1761,37 @@
           min="0"
           step="0.5"
           class="form-input">
+      </div>
+
+      <div class="form-group dependency-edit-section">
+        <label>Dépendances entre tâches</label>
+        <p class="field-hint">La tâche courante ne démarre ou ne se termine pas selon les règles FS / SS / FF tant que le prédécesseur n’est pas dans l’état attendu. Même projet uniquement.</p>
+        <ul class="dependency-list" *ngIf="taskEditDependencies.length; else noDepsEdit">
+          <li *ngFor="let d of taskEditDependencies">
+            <span class="dep-title">{{ d.depends_on_task_title || ('#' + d.depends_on_task_id) }}</span>
+            <span class="dep-badge">{{ dependencyTypeLabel(d.dependency_type) }}</span>
+            <span class="dep-status text-muted small">{{ d.depends_on_task_status }}</span>
+            <button type="button" class="btn-icon danger" (click)="removeDependencyFromEditModal(d.depends_on_task_id)" title="Supprimer la dépendance">
+              <i class="bi bi-link-break"></i>
+            </button>
+          </li>
+        </ul>
+        <ng-template #noDepsEdit>
+          <p class="text-muted small">Aucune dépendance.</p>
+        </ng-template>
+        <div class="form-row add-dep-row" *ngIf="taskToEdit.project_id">
+          <select class="form-select" [(ngModel)]="editDependsOnTaskId" name="editDependsOn">
+            <option [ngValue]="null">Tâche prédécesseur…</option>
+            <option *ngFor="let ct of getPredecessorCandidatesForEdit()" [ngValue]="ct.id">
+              {{ ct.title }} ({{ ct.status }})
+            </option>
+          </select>
+          <select class="form-select" [(ngModel)]="editDependencyType" name="editDepType">
+            <option *ngFor="let opt of dependencyTypeChoices" [ngValue]="opt.value">{{ opt.label }}</option>
+          </select>
+          <button type="button" class="btn-secondary" (click)="addDependencyFromEditModal()">Ajouter</button>
+        </div>
+        <p class="text-muted small" *ngIf="!taskToEdit.project_id">Assignez un projet à la tâche pour gérer les dépendances avec d’autres tâches du même projet.</p>
       </div>
 
       <div class="form-actions">
@@ -2039,7 +2227,7 @@
         <button type="button" class="btn-secondary" (click)="closeAddDocumentModal()">
           Annuler
         </button>
-        <button type="submit" class="btn-primary" [disabled]="loading || !newDocData.title || !selectedFile || !newDocData.employeeId">
+        <button type="submit" class="btn-primary" [disabled]="isAddDocumentDisabled()">
           <span *ngIf="!loading">
             <i class="bi bi-check-circle"></i>
             Enregistrer

@@ -1,14 +1,20 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EmployeeService {
-  private baseUrl = 'http://localhost:3001/api/employee';
+  private baseUrl = `${environment.apiUrl}/employee`;
+  private tasksBase = `${environment.apiUrl}/tasks`;
 
   constructor(private http: HttpClient) {}
+
+  getTaskNotifications(employeeId: number): Observable<any> {
+    return this.http.get(`${this.tasksBase}/notifications/employee/${employeeId}`);
+  }
 
   // Récupérer le dashboard complet de l'employé
   getEmployeeDashboard(employeeId: number): Observable<any> {
