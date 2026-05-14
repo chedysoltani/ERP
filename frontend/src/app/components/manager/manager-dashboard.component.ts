@@ -864,6 +864,7 @@ export class ManagerDashboardComponent implements OnInit {
   showEditTaskModal = false;
   editAddEmployeeId: number | null = null;
   taskEditDependencies: any[] = [];
+  projectTaskDependencies: { task_id: number; depends_on_task_id: number }[] = [];
   editDependsOnTaskId: number | null = null;
   editDependencyType: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' = 'finish_to_start';
   readonly dependencyTypeChoices: { value: 'finish_to_start' | 'start_to_start' | 'finish_to_finish'; label: string }[] = [
@@ -893,8 +894,10 @@ export class ManagerDashboardComponent implements OnInit {
     this.editDependsOnTaskId = null;
     this.editDependencyType = 'finish_to_start';
     this.taskEditDependencies = [];
+    this.projectTaskDependencies = [];
     this.showEditTaskModal = true;
     this.refreshTaskEditDependencies();
+    this.refreshProjectTaskDependencies();
   }
 
   closeEditTaskModal() {
@@ -918,19 +921,59 @@ export class ManagerDashboardComponent implements OnInit {
     });
   }
 
+  refreshProjectTaskDependencies() {
+    const pid = this.taskToEdit?.project_id;
+    if (pid == null) {
+      this.projectTaskDependencies = [];
+      return;
+    }
+    this.taskEnhancedService.getProjectTaskDependencies(pid).subscribe({
+      next: (res: any) => {
+        this.projectTaskDependencies = Array.isArray(res?.data) ? res.data : [];
+      },
+      error: () => {
+        this.projectTaskDependencies = [];
+      }
+    });
+  }
+
   getPredecessorCandidatesForEdit(): Task[] {
     const pid = this.taskToEdit?.project_id;
     const selfId = this.taskToEdit?.id;
     if (pid == null || !this.tasks?.length) return [];
+
     const blocked = new Set(
       (this.taskEditDependencies || []).map((d: any) => Number(d.depends_on_task_id))
     );
+
+    const forbidden = new Set<number>();
+    const adjacency = new Map<number, number[]>();
+    for (const dep of this.projectTaskDependencies) {
+      const source = Number(dep.depends_on_task_id);
+      const target = Number(dep.task_id);
+      if (!adjacency.has(source)) adjacency.set(source, []);
+      adjacency.get(source)!.push(target);
+    }
+
+    const queue = [Number(selfId)];
+    while (queue.length) {
+      const current = queue.shift()!;
+      const nextTasks = adjacency.get(current) || [];
+      for (const next of nextTasks) {
+        if (!forbidden.has(next) && next !== Number(selfId)) {
+          forbidden.add(next);
+          queue.push(next);
+        }
+      }
+    }
+
     return this.tasks.filter(
       (t) =>
         t.id !== selfId &&
         t.project_id != null &&
         Number(t.project_id) === Number(pid) &&
-        !blocked.has(t.id)
+        !blocked.has(t.id) &&
+        !forbidden.has(t.id)
     );
   }
 

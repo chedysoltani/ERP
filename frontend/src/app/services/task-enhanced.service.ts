@@ -67,6 +67,11 @@ export class TaskEnhancedService {
     return this.http.delete(`${this.apiUrl}/tasks/${taskId}/dependencies/${dependsOnTaskId}`, this.authOpts());
   }
 
+  // Obtenir toutes les dépendances d'un projet pour détecter les cycles côté client
+  getProjectTaskDependencies(projectId: number): Observable<any> {
+    return this.http.get(`${this.apiUrl}/tasks/project/${projectId}/dependencies`, this.authOpts());
+  }
+
   /** Prédécesseurs en retard qui bloquent encore des tâches ouvertes du projet */
   getProjectDependencyAlerts(projectId: number): Observable<any> {
     return this.http.get(`${this.apiUrl}/tasks/dependency-alerts/${projectId}`, this.authOpts());

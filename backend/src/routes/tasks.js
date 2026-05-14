@@ -970,6 +970,33 @@ router.post('/:id/dependencies', async (req, res) => {
   }
 });
 
+// Obtenir les dépendances d'un projet
+router.get('/project/:projectId/dependencies', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const dependencies = await db.query(
+      `
+      SELECT td.task_id, td.depends_on_task_id
+      FROM task_dependencies td
+      JOIN tasks t ON t.id = td.task_id
+      WHERE t.project_id = ?
+      `,
+      [projectId]
+    );
+
+    res.json({
+      success: true,
+      data: dependencies
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des dépendances de projet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des dépendances de projet'
+    });
+  }
+});
+
 // Supprimer une dépendance
 router.delete('/:id/dependencies/:dependsOnTaskId', async (req, res) => {
   try {
