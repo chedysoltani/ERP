@@ -1,4 +1,4 @@
-﻿<!-- index.html must include:
+<!-- index.html must include:
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 -->
@@ -354,6 +354,10 @@
                 <button class="btn-action" (click)="editProject(project)">
                   <i class="bi bi-pencil"></i>
                   Modifier
+                </button>
+                <button class="btn-action text-danger" (click)="deleteProject(project)">
+                  <i class="bi bi-trash"></i>
+                  Supprimer
                 </button>
               </div>
             </div>

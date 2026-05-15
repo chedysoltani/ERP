@@ -2082,10 +2082,22 @@ export class ManagerDashboardComponent implements OnInit {
   }
 
   deleteProject(project: any) {
-    if (confirm(`Êtes-vous sûr de vouloir supprimer le projet "${project.name}" ?`)) {
-      console.log('Supprimer le projet:', project);
-      // TODO: Implémenter la suppression
-      alert(`Suppression du projet: ${project.name}\n\nFonctionnalité à implémenter`);
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le projet "${project.name}" ? Toutes les tâches et dépendances associées seront également supprimées.`)) {
+      this.managerAuthService.deleteProject(project.id).subscribe({
+        next: (response: any) => {
+          console.log('Projet supprimé:', response);
+          alert('Projet supprimé avec succès');
+          this.loadProjectsFromDatabase();
+          this.loadTasksFromDatabase(); // reload tasks to reflect deleted ones
+          if (this.selectedProjectForAnalytics === project.id) {
+            this.selectedProjectForAnalytics = null;
+          }
+        },
+        error: (error: any) => {
+          console.error('Erreur lors de la suppression du projet:', error);
+          alert('Erreur lors de la suppression du projet: ' + (error.message || 'Erreur inconnue'));
+        }
+      });
     }
   }
 

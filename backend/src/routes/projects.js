@@ -193,6 +193,19 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // Delete task dependencies related to tasks in this project
+    await db.query(`
+      DELETE FROM task_dependencies 
+      WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?) 
+      OR depends_on_task_id IN (SELECT id FROM tasks WHERE project_id = ?)
+    `, [id, id]);
+
+    // Delete task assignments related to tasks in this project
+    await db.query('DELETE FROM task_assignments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)', [id]);
+
+    // Delete tasks associated with the project
+    await db.query('DELETE FROM tasks WHERE project_id = ?', [id]);
+
     // Supprimer le projet
     await db.query('DELETE FROM projects WHERE id = ?', [id]);
 
