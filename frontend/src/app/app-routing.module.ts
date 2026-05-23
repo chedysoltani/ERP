@@ -12,8 +12,8 @@ const routes: Routes = [
   { path: 'gantt', component: GanttPageComponent, canActivate: [ManagerAuthGuard] },
   { path: 'employee-login', loadChildren: () => import('./components/employee/employee-login.module').then(m => m.EmployeeLoginModule) },
   { path: 'employee', loadChildren: () => import('./components/employee/employee.module').then(m => m.EmployeeModule) },
-  //{ path: 'home', loadChildren: () => import('./components/home/home.module').then(m => m.HomeModule) },
- 
+  { path: 'admin-login', loadChildren: () => import('./components/admin/admin.module').then(m => m.AdminModule) },
+  { path: 'admin', loadChildren: () => import('./components/admin/admin.module').then(m => m.AdminModule) },
   { path: '**', redirectTo: '/landing' }
 ];
 

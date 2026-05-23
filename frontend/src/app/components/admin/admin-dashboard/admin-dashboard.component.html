@@ -1,0 +1,910 @@
+<div class="admin-shell" [class.sidebar-collapsed]="sidebarCollapsed" [class.light-mode]="!darkMode">
+
+  <!-- ════════════════════════════════════════ SIDEBAR ════════ -->
+  <aside class="admin-sidebar" [class.open]="mobileMenuOpen">
+    <div class="sidebar-brand" (click)="setSection('overview')">
+      <div class="sidebar-logo">
+        <i class="bi bi-shield-fill-check"></i>
+      </div>
+      <span class="sidebar-brand-text">SIT <strong>ERP</strong></span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Principal</div>
+      <a class="nav-item" [class.active]="activeSection==='overview'" (click)="setSection('overview')">
+        <i class="bi bi-grid-fill nav-icon"></i>
+        <span class="nav-label">Vue d'ensemble</span>
+        <span class="nav-pill" *ngIf="unreadNotifications > 0">{{unreadNotifications}}</span>
+      </a>
+      <a class="nav-item" [class.active]="activeSection==='users'" (click)="setSection('users')">
+        <i class="bi bi-people-fill nav-icon"></i>
+        <span class="nav-label">Utilisateurs</span>
+        <span class="nav-count">{{stats.totalUsers}}</span>
+      </a>
+      <a class="nav-item" [class.active]="activeSection==='roles'" (click)="setSection('roles')">
+        <i class="bi bi-key-fill nav-icon"></i>
+        <span class="nav-label">Rôles & Permissions</span>
+      </a>
+
+      <div class="nav-section-label">Supervision</div>
+      <a class="nav-item" [class.active]="activeSection==='analytics'" (click)="setSection('analytics')">
+        <i class="bi bi-bar-chart-fill nav-icon"></i>
+        <span class="nav-label">Analytics</span>
+      </a>
+      <a class="nav-item" [class.active]="activeSection==='activity'" (click)="setSection('activity')">
+        <i class="bi bi-activity nav-icon"></i>
+        <span class="nav-label">Activité système</span>
+      </a>
+
+      <div class="nav-section-label">Configuration</div>
+      <a class="nav-item" [class.active]="activeSection==='settings'" (click)="setSection('settings')">
+        <i class="bi bi-gear-fill nav-icon"></i>
+        <span class="nav-label">Paramètres</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-admin-card">
+        <div class="admin-avatar-sm" [style.background]="getAvatarColor(admin?.role || 'admin')">
+          {{getInitials(admin || {nom:'A',prenom:'',role:'admin',id:0,email:'',actif:1})}}
+        </div>
+        <div class="admin-info" *ngIf="!sidebarCollapsed">
+          <div class="admin-name">{{admin?.prenom}} {{admin?.nom}}</div>
+          <div class="admin-role-badge">Administrateur</div>
+        </div>
+      </div>
+      <button class="btn-collapse" (click)="sidebarCollapsed = !sidebarCollapsed" title="Réduire">
+        <i class="bi" [class.bi-chevron-double-left]="!sidebarCollapsed" [class.bi-chevron-double-right]="sidebarCollapsed"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Mobile overlay -->
+  <div class="sidebar-overlay" [class.visible]="mobileMenuOpen" (click)="mobileMenuOpen = false"></div>
+
+  <!-- ════════════════════════════════════════ MAIN ════════════ -->
+  <div class="admin-main">
+
+    <!-- ─── TOPBAR ─── -->
+    <header class="admin-topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" (click)="mobileMenuOpen = !mobileMenuOpen">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="topbar-search-wrap">
+          <i class="bi bi-search topbar-search-icon"></i>
+          <input type="text" class="topbar-search" placeholder="Recherche globale..." [(ngModel)]="searchQuery"/>
+          <kbd class="search-kbd">⌘K</kbd>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <!-- System status -->
+        <div class="system-status">
+          <span class="status-dot online"></span>
+          <span class="status-text">Système OK</span>
+        </div>
+
+        <!-- Notifications -->
+        <div class="notif-bell-wrap">
+          <button class="icon-btn" (click)="showNotifications = !showNotifications">
+            <i class="bi bi-bell-fill"></i>
+            <span class="notif-badge" *ngIf="unreadNotifications > 0">{{unreadNotifications}}</span>
+          </button>
+          <div class="notif-dropdown" [class.open]="showNotifications">
+            <div class="notif-header">
+              <span>Notifications</span>
+              <span class="notif-count">{{unreadNotifications}} nouvelles</span>
+            </div>
+            <div class="notif-list">
+              <div class="notif-item" *ngFor="let n of notifications" [class.unread]="!n.read" (click)="n.read = true">
+                <div class="notif-icon-wrap" [class]="'notif-color-' + n.color">
+                  <i class="bi" [class]="n.icon"></i>
+                </div>
+                <div class="notif-body">
+                  <div class="notif-text">{{n.text}}</div>
+                  <div class="notif-time">{{n.time}}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dark/light toggle -->
+        <button class="icon-btn theme-toggle" (click)="darkMode = !darkMode" [title]="darkMode ? 'Mode clair' : 'Mode sombre'">
+          <i class="bi" [class.bi-sun-fill]="darkMode" [class.bi-moon-fill]="!darkMode"></i>
+        </button>
+
+        <!-- Profile -->
+        <div class="profile-menu-wrap">
+          <button class="admin-avatar-btn" (click)="showProfileMenu = !showProfileMenu"
+                  [style.background]="getAvatarColor(admin?.role || 'admin')">
+            {{getInitials(admin || {nom:'A',prenom:'',role:'admin',id:0,email:'',actif:1})}}
+          </button>
+          <div class="profile-dropdown" [class.open]="showProfileMenu">
+            <div class="profile-header">
+              <strong>{{admin?.prenom}} {{admin?.nom}}</strong>
+              <span>{{admin?.email}}</span>
+            </div>
+            <button class="profile-action" (click)="setSection('settings'); showProfileMenu = false">
+              <i class="bi bi-gear"></i> Paramètres
+            </button>
+            <button class="profile-action danger" (click)="logout()">
+              <i class="bi bi-box-arrow-right"></i> Déconnexion
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ─── PAGE CONTENT ─── -->
+    <main class="admin-content">
+
+      <!-- ══════ OVERVIEW ══════ -->
+      <section class="page-section" [class.active]="activeSection==='overview'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Vue d'ensemble</h2>
+            <p class="page-subtitle">Tableau de bord administrateur — données en temps réel</p>
+          </div>
+          <button class="btn-primary-action" (click)="openCreateUser()">
+            <i class="bi bi-person-plus-fill me-2"></i>Nouvel utilisateur
+          </button>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card stat-indigo">
+            <div class="stat-top">
+              <div class="stat-icon-wrap indigo"><i class="bi bi-people-fill"></i></div>
+              <div class="stat-trend up"><i class="bi bi-arrow-up-right"></i> +12%</div>
+            </div>
+            <div class="stat-value">{{animatedStats.totalUsers}}</div>
+            <div class="stat-label">Total utilisateurs</div>
+            <div class="stat-bar"><div class="stat-bar-fill" [style.width.%]="100"></div></div>
+          </div>
+
+          <div class="stat-card stat-emerald">
+            <div class="stat-top">
+              <div class="stat-icon-wrap emerald"><i class="bi bi-person-check-fill"></i></div>
+              <div class="stat-trend up"><i class="bi bi-arrow-up-right"></i> Actifs</div>
+            </div>
+            <div class="stat-value">{{animatedStats.activeEmployees}}</div>
+            <div class="stat-label">Employés actifs</div>
+            <div class="stat-bar"><div class="stat-bar-fill emerald" [style.width.%]="stats.totalUsers ? (stats.activeEmployees/stats.totalUsers*100) : 0"></div></div>
+          </div>
+
+          <div class="stat-card stat-amber">
+            <div class="stat-top">
+              <div class="stat-icon-wrap amber"><i class="bi bi-briefcase-fill"></i></div>
+              <div class="stat-trend neutral"><i class="bi bi-dash"></i> Stable</div>
+            </div>
+            <div class="stat-value">{{animatedStats.activeManagers}}</div>
+            <div class="stat-label">Managers actifs</div>
+            <div class="stat-bar"><div class="stat-bar-fill amber" [style.width.%]="stats.totalUsers ? (stats.activeManagers/stats.totalUsers*100) : 0"></div></div>
+          </div>
+
+          <div class="stat-card stat-sky">
+            <div class="stat-top">
+              <div class="stat-icon-wrap sky"><i class="bi bi-box-arrow-in-right"></i></div>
+              <div class="stat-trend up"><i class="bi bi-arrow-up-right"></i> Aujourd'hui</div>
+            </div>
+            <div class="stat-value">{{animatedStats.todayLogins}}</div>
+            <div class="stat-label">Connexions du jour</div>
+            <div class="stat-bar"><div class="stat-bar-fill sky" [style.width.%]="stats.totalUsers ? (stats.todayLogins/stats.totalUsers*100) : 0"></div></div>
+          </div>
+
+          <div class="stat-card stat-rose">
+            <div class="stat-top">
+              <div class="stat-icon-wrap rose"><i class="bi bi-person-x-fill"></i></div>
+              <div class="stat-trend down" *ngIf="stats.inactiveUsers > 0"><i class="bi bi-exclamation"></i> Attention</div>
+              <div class="stat-trend up" *ngIf="stats.inactiveUsers === 0"><i class="bi bi-check"></i> OK</div>
+            </div>
+            <div class="stat-value">{{stats.inactiveUsers}}</div>
+            <div class="stat-label">Comptes désactivés</div>
+            <div class="stat-bar"><div class="stat-bar-fill rose" [style.width.%]="stats.totalUsers ? (stats.inactiveUsers/stats.totalUsers*100) : 0"></div></div>
+          </div>
+
+          <div class="stat-card stat-violet">
+            <div class="stat-top">
+              <div class="stat-icon-wrap violet"><i class="bi bi-calendar-check-fill"></i></div>
+              <div class="stat-trend up"><i class="bi bi-arrow-up-right"></i> Présences</div>
+            </div>
+            <div class="stat-value">{{stats.attendanceToday}}</div>
+            <div class="stat-label">Présences aujourd'hui</div>
+            <div class="stat-bar"><div class="stat-bar-fill violet" [style.width.%]="stats.totalUsers ? (stats.attendanceToday/stats.totalUsers*100) : 0"></div></div>
+          </div>
+        </div>
+
+        <!-- Bottom row: Recent activity + Quick actions -->
+        <div class="overview-bottom">
+          <div class="activity-card glass-card">
+            <div class="card-section-header">
+              <h3><i class="bi bi-activity me-2 text-indigo"></i>Activité récente</h3>
+              <button class="btn-text" (click)="setSection('activity')">Voir tout <i class="bi bi-arrow-right"></i></button>
+            </div>
+            <div class="activity-list">
+              <div class="activity-row" *ngFor="let log of activityLogs.slice(0,6)">
+                <div class="activity-avatar" [style.background]="getAvatarColor(log.role)">
+                  {{getInitials(log)}}
+                </div>
+                <div class="activity-info">
+                  <div class="activity-name">{{log.prenom}} {{log.nom}}</div>
+                  <div class="activity-detail">
+                    <span class="role-chip" [class]="'role-' + log.role">{{log.role}}</span>
+                    {{formatDate(log.lastActivity)}}
+                  </div>
+                </div>
+                <div class="activity-status" [class.active]="log.actif" [class.inactive]="!log.actif">
+                  {{log.actif ? 'Actif' : 'Inactif'}}
+                </div>
+              </div>
+              <div class="activity-empty" *ngIf="activityLogs.length === 0">
+                <i class="bi bi-inbox"></i> Aucune activité récente
+              </div>
+            </div>
+          </div>
+
+          <div class="quick-actions-card glass-card">
+            <div class="card-section-header">
+              <h3><i class="bi bi-lightning-fill me-2 text-amber"></i>Actions rapides</h3>
+            </div>
+            <div class="quick-actions-grid">
+              <button class="quick-btn" (click)="openCreateUser()">
+                <div class="quick-icon indigo"><i class="bi bi-person-plus-fill"></i></div>
+                <span>Ajouter utilisateur</span>
+              </button>
+              <button class="quick-btn" (click)="setSection('roles')">
+                <div class="quick-icon amber"><i class="bi bi-key-fill"></i></div>
+                <span>Gérer permissions</span>
+              </button>
+              <button class="quick-btn" (click)="setSection('analytics')">
+                <div class="quick-icon sky"><i class="bi bi-bar-chart-fill"></i></div>
+                <span>Analytics</span>
+              </button>
+              <button class="quick-btn" (click)="setSection('settings')">
+                <div class="quick-icon violet"><i class="bi bi-gear-fill"></i></div>
+                <span>Paramètres</span>
+              </button>
+              <button class="quick-btn" (click)="loadAll()">
+                <div class="quick-icon emerald"><i class="bi bi-arrow-clockwise"></i></div>
+                <span>Actualiser</span>
+              </button>
+              <button class="quick-btn" (click)="setSection('activity')">
+                <div class="quick-icon rose"><i class="bi bi-journal-text"></i></div>
+                <span>Logs système</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ USERS ══════ -->
+      <section class="page-section" [class.active]="activeSection==='users'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Gestion des utilisateurs</h2>
+            <p class="page-subtitle">{{filteredUsers.length}} utilisateur(s) trouvé(s)</p>
+          </div>
+          <button class="btn-primary-action" (click)="openCreateUser()">
+            <i class="bi bi-person-plus-fill me-2"></i>Nouvel utilisateur
+          </button>
+        </div>
+
+        <!-- Filters bar -->
+        <div class="filters-bar glass-card">
+          <div class="filter-search-wrap">
+            <i class="bi bi-search filter-search-icon"></i>
+            <input type="text" class="filter-search" placeholder="Rechercher par nom, email..."
+                   [(ngModel)]="userSearch" (ngModelChange)="applyFilters()"/>
+          </div>
+          <div class="filter-chips">
+            <select class="filter-select" [(ngModel)]="userRoleFilter" (ngModelChange)="applyFilters()">
+              <option value="all">Tous les rôles</option>
+              <option value="admin">Administrateur</option>
+              <option value="manager">Manager</option>
+              <option value="employee">Employé</option>
+            </select>
+            <select class="filter-select" [(ngModel)]="userStatusFilter" (ngModelChange)="applyFilters()">
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actif</option>
+              <option value="inactive">Inactif</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Users table -->
+        <div class="table-card glass-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Email</th>
+                <th>Rôle</th>
+                <th>Statut</th>
+                <th>Inscription</th>
+                <th class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="table-row" *ngFor="let user of pagedUsers">
+                <td>
+                  <div class="user-cell">
+                    <div class="user-avatar" [style.background]="getAvatarColor(user.role)">
+                      {{getInitials(user)}}
+                    </div>
+                    <div class="user-info">
+                      <div class="user-fullname">{{user.prenom}} {{user.nom}}</div>
+                      <div class="user-tel" *ngIf="user.telephone">{{user.telephone}}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="td-email">{{user.email}}</td>
+                <td>
+                  <span class="role-chip" [class]="'role-' + user.role">
+                    <i class="bi me-1" [class]="getRoleIcon(user.role)"></i>
+                    {{user.role === 'admin' ? 'Admin' : user.role === 'manager' ? 'Manager' : 'Employé'}}
+                  </span>
+                </td>
+                <td>
+                  <div class="status-toggle-wrap">
+                    <button class="status-toggle" [class.on]="user.actif" (click)="toggleUserStatus(user)"
+                            [title]="user.actif ? 'Désactiver' : 'Activer'">
+                      <span class="status-toggle-thumb"></span>
+                    </button>
+                    <span class="status-label">{{user.actif ? 'Actif' : 'Inactif'}}</span>
+                  </div>
+                </td>
+                <td class="td-date">{{formatDate(user.date_creation || '')}}</td>
+                <td class="td-actions">
+                  <div class="row-actions">
+                    <button class="row-btn edit" (click)="openEditUser(user)" title="Modifier">
+                      <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    <button class="row-btn key" (click)="openResetPassword(user)" title="Réinitialiser MDP">
+                      <i class="bi bi-key-fill"></i>
+                    </button>
+                    <button class="row-btn delete" (click)="confirmDelete(user)" title="Supprimer">
+                      <i class="bi bi-trash-fill"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr *ngIf="pagedUsers.length === 0">
+                <td colspan="6" class="table-empty">
+                  <i class="bi bi-inbox"></i> Aucun utilisateur trouvé
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div class="pagination-bar" *ngIf="totalPages > 1">
+            <button class="page-btn" [disabled]="currentPage===1" (click)="currentPage = currentPage - 1">
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="page-btn" *ngFor="let p of totalPagesArr"
+                    [class.active]="p === currentPage" (click)="currentPage = p">
+              {{p}}
+            </button>
+            <button class="page-btn" [disabled]="currentPage===totalPages" (click)="currentPage = currentPage + 1">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ ROLES & PERMISSIONS ══════ -->
+      <section class="page-section" [class.active]="activeSection==='roles'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Rôles & Permissions</h2>
+            <p class="page-subtitle">Contrôle des accès par rôle</p>
+          </div>
+        </div>
+
+        <!-- Role selector tabs -->
+        <div class="role-tabs">
+          <button class="role-tab" [class.active]="selectedPermRole==='admin'" (click)="selectedPermRole='admin'">
+            <i class="bi bi-shield-fill me-2 text-rose"></i>Administrateur
+          </button>
+          <button class="role-tab" [class.active]="selectedPermRole==='manager'" (click)="selectedPermRole='manager'">
+            <i class="bi bi-briefcase-fill me-2 text-amber"></i>Manager
+          </button>
+          <button class="role-tab" [class.active]="selectedPermRole==='employee'" (click)="selectedPermRole='employee'">
+            <i class="bi bi-person-fill me-2 text-indigo"></i>Employé
+          </button>
+        </div>
+
+        <!-- Permissions grid -->
+        <div class="permissions-grid">
+          <div class="perm-card glass-card" *ngFor="let perm of permissionsList">
+            <div class="perm-info">
+              <div class="perm-icon-wrap">
+                <i class="bi bi-check-circle-fill text-emerald" *ngIf="permissions[selectedPermRole][perm]"></i>
+                <i class="bi bi-x-circle-fill text-rose" *ngIf="!permissions[selectedPermRole][perm]"></i>
+              </div>
+              <div>
+                <div class="perm-name">{{perm}}</div>
+                <div class="perm-role-note">Rôle : {{selectedPermRole}}</div>
+              </div>
+            </div>
+            <label class="toggle-switch" [class.disabled]="selectedPermRole==='admin'">
+              <input type="checkbox" [(ngModel)]="permissions[selectedPermRole][perm]"
+                     [disabled]="selectedPermRole==='admin'"/>
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Role cards summary -->
+        <div class="role-summary-grid">
+          <div class="role-summary-card glass-card" *ngFor="let role of ['admin','manager','employee']">
+            <div class="role-summary-header">
+              <div class="role-summary-icon" [class]="'role-icon-' + role">
+                <i class="bi" [class]="getRoleIcon(role)"></i>
+              </div>
+              <div>
+                <div class="role-summary-title">{{role === 'admin' ? 'Administrateur' : role === 'manager' ? 'Manager' : 'Employé'}}</div>
+                <div class="role-summary-count">
+                  {{getRoleBarWidth(role)}}% des utilisateurs
+                </div>
+              </div>
+            </div>
+            <div class="role-perm-count">
+              <span class="perm-active">{{getPermCount(role, true)}} autorisées</span>
+              <span class="perm-blocked">{{getPermCount(role, false)}} bloquées</span>
+            </div>
+            <div class="role-progress-bar">
+              <div class="role-progress-fill" [class]="'fill-' + role"
+                   [style.width.%]="getRoleBarWidth(role)"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ ANALYTICS ══════ -->
+      <section class="page-section" [class.active]="activeSection==='analytics'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Analytics & Monitoring</h2>
+            <p class="page-subtitle">Visualisation des données plateforme</p>
+          </div>
+          <button class="btn-secondary-action" (click)="loadAll()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
+          </button>
+        </div>
+
+        <!-- KPI row -->
+        <div class="kpi-row">
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon indigo"><i class="bi bi-people-fill"></i></div>
+            <div class="kpi-value">{{stats.totalUsers}}</div>
+            <div class="kpi-label">Total comptes</div>
+          </div>
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon emerald"><i class="bi bi-activity"></i></div>
+            <div class="kpi-value">{{stats.activeEmployees + stats.activeManagers}}</div>
+            <div class="kpi-label">Comptes actifs</div>
+          </div>
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon rose"><i class="bi bi-person-x"></i></div>
+            <div class="kpi-value">{{stats.inactiveUsers}}</div>
+            <div class="kpi-label">Comptes inactifs</div>
+          </div>
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon sky"><i class="bi bi-calendar-check"></i></div>
+            <div class="kpi-value">{{stats.attendanceToday}}</div>
+            <div class="kpi-label">Présences auj.</div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="charts-row">
+          <!-- Donut chart: rôles -->
+          <div class="chart-card glass-card">
+            <div class="chart-title"><i class="bi bi-pie-chart-fill me-2"></i>Répartition par rôle</div>
+            <div class="donut-chart-wrap">
+              <svg viewBox="0 0 120 120" class="donut-svg">
+                <circle class="donut-ring" cx="60" cy="60" r="45" fill="none" stroke="#1e293b" stroke-width="18"/>
+                <circle class="donut-seg seg-indigo" cx="60" cy="60" r="45" fill="none"
+                        stroke="#6366f1" stroke-width="18" stroke-dasharray="283" stroke-dashoffset="0"
+                        transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="donut-center">
+                <div class="donut-total">{{stats.totalUsers}}</div>
+                <div class="donut-label">Utilisateurs</div>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <div class="legend-item" *ngFor="let rs of roleStats">
+                <span class="legend-dot" [class]="'dot-' + rs.role"></span>
+                <span>{{rs.role === 'admin' ? 'Admin' : rs.role === 'manager' ? 'Manager' : 'Employé'}}</span>
+                <strong>{{rs.count}}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bar chart: croissance -->
+          <div class="chart-card glass-card">
+            <div class="chart-title"><i class="bi bi-graph-up me-2"></i>Inscriptions (7 derniers jours)</div>
+            <div class="bar-chart-wrap">
+              <div class="bar-group" *ngFor="let d of growthData">
+                <div class="bar-col">
+                  <div class="bar-fill indigo"
+                       [style.height.%]="getMaxGrowth() ? (d.count / getMaxGrowth() * 100) : 0">
+                    <span class="bar-value">{{d.count}}</span>
+                  </div>
+                </div>
+                <div class="bar-label">{{d.day | date:'dd/MM'}}</div>
+              </div>
+              <div class="bar-empty" *ngIf="growthData.length === 0">
+                <i class="bi bi-bar-chart"></i> Aucune donnée disponible
+              </div>
+            </div>
+          </div>
+
+          <!-- Status donut -->
+          <div class="chart-card glass-card">
+            <div class="chart-title"><i class="bi bi-toggle-on me-2"></i>Comptes actifs vs inactifs</div>
+            <div class="status-chart">
+              <div class="status-ring-wrap">
+                <div class="ring-segment active"
+                     [style.--pct]="stats.totalUsers ? (stats.activeEmployees + stats.activeManagers) / stats.totalUsers : 0">
+                </div>
+              </div>
+              <div class="status-stats">
+                <div class="status-stat">
+                  <div class="ss-dot active"></div>
+                  <div class="ss-info">
+                    <div class="ss-value">{{stats.activeEmployees + stats.activeManagers}}</div>
+                    <div class="ss-label">Actifs</div>
+                  </div>
+                </div>
+                <div class="status-stat">
+                  <div class="ss-dot inactive"></div>
+                  <div class="ss-info">
+                    <div class="ss-value">{{stats.inactiveUsers}}</div>
+                    <div class="ss-label">Inactifs</div>
+                  </div>
+                </div>
+                <div class="status-stat">
+                  <div class="ss-dot admin"></div>
+                  <div class="ss-info">
+                    <div class="ss-value">{{stats.totalAdmins}}</div>
+                    <div class="ss-label">Admins</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- System health -->
+        <div class="system-health-card glass-card">
+          <div class="card-section-header">
+            <h3><i class="bi bi-cpu-fill me-2 text-indigo"></i>État du système</h3>
+            <span class="health-badge online"><i class="bi bi-circle-fill me-1"></i>Opérationnel</span>
+          </div>
+          <div class="health-modules">
+            <div class="health-module" *ngFor="let m of [
+              {name:'API Backend', status:'ok', latency:'12ms'},
+              {name:'Base de données', status:'ok', latency:'3ms'},
+              {name:'Authentification JWT', status:'ok', latency:'1ms'},
+              {name:'Module Présence', status:'ok', latency:'8ms'},
+              {name:'Module Documents', status:'ok', latency:'15ms'},
+              {name:'IA & Recommandations', status:'ok', latency:'45ms'}
+            ]">
+              <div class="hm-icon ok"><i class="bi bi-check-circle-fill"></i></div>
+              <div class="hm-name">{{m.name}}</div>
+              <div class="hm-latency">{{m.latency}}</div>
+              <div class="hm-status online">En ligne</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ ACTIVITY ══════ -->
+      <section class="page-section" [class.active]="activeSection==='activity'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Activité système</h2>
+            <p class="page-subtitle">Logs et événements récents</p>
+          </div>
+          <button class="btn-secondary-action" (click)="loadActivity()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
+          </button>
+        </div>
+
+        <div class="activity-full-card glass-card">
+          <div class="activity-full-list">
+            <div class="activity-full-row" *ngFor="let log of activityLogs; let i = index"
+                 [style.animation-delay.ms]="i * 40">
+              <div class="afl-index">{{i + 1}}</div>
+              <div class="afl-avatar" [style.background]="getAvatarColor(log.role)">{{getInitials(log)}}</div>
+              <div class="afl-info">
+                <div class="afl-name">{{log.prenom}} {{log.nom}}</div>
+                <div class="afl-email">{{log.email}}</div>
+              </div>
+              <span class="role-chip" [class]="'role-' + log.role">{{log.role}}</span>
+              <div class="afl-time">{{formatDate(log.lastActivity)}}</div>
+              <div class="afl-status" [class.active]="log.actif" [class.inactive]="!log.actif">
+                <i class="bi" [class.bi-circle-fill]="log.actif" [class.bi-circle]="!log.actif"></i>
+                {{log.actif ? 'Actif' : 'Inactif'}}
+              </div>
+            </div>
+            <div class="table-empty" *ngIf="activityLogs.length === 0">
+              <i class="bi bi-inbox"></i> Aucune activité enregistrée
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ SETTINGS ══════ -->
+      <section class="page-section" [class.active]="activeSection==='settings'">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Paramètres globaux</h2>
+            <p class="page-subtitle">Configuration de la plateforme</p>
+          </div>
+          <button class="btn-primary-action" (click)="saveSettings()">
+            <i class="bi bi-check-circle-fill me-2"></i>Sauvegarder
+          </button>
+        </div>
+
+        <div class="settings-saved-banner" [class.visible]="settingsSaved">
+          <i class="bi bi-check-circle-fill"></i> Paramètres sauvegardés avec succès
+        </div>
+
+        <div class="settings-grid">
+          <!-- Plateforme -->
+          <div class="settings-section glass-card">
+            <div class="settings-section-header">
+              <div class="settings-section-icon indigo"><i class="bi bi-building"></i></div>
+              <div>
+                <h3>Plateforme</h3>
+                <p>Configuration générale</p>
+              </div>
+            </div>
+            <div class="settings-fields">
+              <div class="settings-field">
+                <label>Nom de la plateforme</label>
+                <input type="text" class="settings-input" [(ngModel)]="settings.platformName"/>
+              </div>
+              <div class="settings-field">
+                <label>Langue par défaut</label>
+                <select class="settings-input" [(ngModel)]="settings.language">
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                  <option value="ar">العربية</option>
+                </select>
+              </div>
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Mode maintenance</span>
+                  <span class="toggle-desc">Restreint l'accès aux admins uniquement</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.maintenanceMode"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Inscriptions ouvertes</span>
+                  <span class="toggle-desc">Autoriser les nouvelles inscriptions</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.registrationOpen"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sécurité -->
+          <div class="settings-section glass-card">
+            <div class="settings-section-header">
+              <div class="settings-section-icon rose"><i class="bi bi-shield-fill"></i></div>
+              <div>
+                <h3>Sécurité</h3>
+                <p>Authentification & accès</p>
+              </div>
+            </div>
+            <div class="settings-fields">
+              <div class="settings-field">
+                <label>Timeout session (minutes)</label>
+                <input type="number" class="settings-input" [(ngModel)]="settings.sessionTimeout" min="5" max="480"/>
+              </div>
+              <div class="settings-field">
+                <label>Tentatives de connexion max</label>
+                <input type="number" class="settings-input" [(ngModel)]="settings.maxLoginAttempts" min="3" max="50"/>
+              </div>
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Double authentification</span>
+                  <span class="toggle-desc">Requis pour tous les comptes</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.twoFactorRequired"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="settings-section glass-card">
+            <div class="settings-section-header">
+              <div class="settings-section-icon amber"><i class="bi bi-bell-fill"></i></div>
+              <div>
+                <h3>Notifications</h3>
+                <p>Alertes et communications</p>
+              </div>
+            </div>
+            <div class="settings-fields">
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Notifications email</span>
+                  <span class="toggle-desc">Envoyer des alertes par email</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.emailNotifications"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- IA & Intégrations -->
+          <div class="settings-section glass-card">
+            <div class="settings-section-header">
+              <div class="settings-section-icon violet"><i class="bi bi-robot"></i></div>
+              <div>
+                <h3>IA & Intégrations</h3>
+                <p>Modules intelligents</p>
+              </div>
+            </div>
+            <div class="settings-fields">
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Module IA actif</span>
+                  <span class="toggle-desc">Recommandations et analyses IA</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.aiEnabled"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <div class="settings-toggle-field">
+                <div class="settings-toggle-info">
+                  <span class="toggle-title">Mode sombre par défaut</span>
+                  <span class="toggle-desc">Thème sombre pour les nouveaux utilisateurs</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" [(ngModel)]="settings.darkModeDefault"/>
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- User Create/Edit Modal -->
+<div class="modal-overlay" [class.open]="showUserModal" (click)="showUserModal = false">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>{{editingUser ? 'Modifier' : 'Créer'}} un utilisateur</h3>
+      <button class="modal-close" (click)="showUserModal = false"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-error" *ngIf="modalError">
+        <i class="bi bi-exclamation-triangle-fill"></i> {{modalError}}
+      </div>
+      <div class="modal-fields">
+        <div class="modal-field-row">
+          <div class="modal-field">
+            <label>Prénom</label>
+            <input type="text" class="modal-input" [(ngModel)]="userForm.prenom" placeholder="Prénom"/>
+          </div>
+          <div class="modal-field">
+            <label>Nom</label>
+            <input type="text" class="modal-input" [(ngModel)]="userForm.nom" placeholder="Nom"/>
+          </div>
+        </div>
+        <div class="modal-field">
+          <label>Email</label>
+          <input type="email" class="modal-input" [(ngModel)]="userForm.email" placeholder="email@exemple.com"/>
+        </div>
+        <div class="modal-field">
+          <label>Téléphone</label>
+          <input type="text" class="modal-input" [(ngModel)]="userForm.telephone" placeholder="+216 XX XXX XXX"/>
+        </div>
+        <div class="modal-field">
+          <label>Rôle</label>
+          <select class="modal-input" [(ngModel)]="userForm.role">
+            <option value="employee">Employé</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Administrateur</option>
+          </select>
+        </div>
+        <div class="modal-field" *ngIf="!editingUser">
+          <label>Mot de passe</label>
+          <input type="password" class="modal-input" [(ngModel)]="userForm.password" placeholder="••••••••"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" (click)="showUserModal = false">Annuler</button>
+      <button class="btn-modal-save" (click)="saveUser()" [disabled]="modalLoading">
+        <span *ngIf="!modalLoading"><i class="bi bi-check-circle-fill me-1"></i> Sauvegarder</span>
+        <span *ngIf="modalLoading"><i class="bi bi-arrow-clockwise spin-icon me-1"></i> Sauvegarde...</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay" [class.open]="showDeleteModal" (click)="showDeleteModal = false">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+    <div class="modal-header danger">
+      <h3><i class="bi bi-trash-fill me-2"></i>Supprimer l'utilisateur</h3>
+      <button class="modal-close" (click)="showDeleteModal = false"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="delete-confirm-text">
+        Êtes-vous sûr de vouloir supprimer <strong>{{deletingUser?.prenom}} {{deletingUser?.nom}}</strong> ?
+        Cette action est irréversible.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" (click)="showDeleteModal = false">Annuler</button>
+      <button class="btn-modal-delete" (click)="deleteUser()" [disabled]="modalLoading">
+        <span *ngIf="!modalLoading"><i class="bi bi-trash-fill me-1"></i> Supprimer</span>
+        <span *ngIf="modalLoading"><i class="bi bi-arrow-clockwise spin-icon me-1"></i></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset password modal -->
+<div class="modal-overlay" [class.open]="showResetModal" (click)="showResetModal = false">
+  <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3><i class="bi bi-key-fill me-2"></i>Réinitialiser le mot de passe</h3>
+      <button class="modal-close" (click)="showResetModal = false"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-error" *ngIf="modalError">
+        <i class="bi bi-exclamation-triangle-fill"></i> {{modalError}}
+      </div>
+      <p style="color:#94a3b8;font-size:13px;margin-bottom:16px;">
+        Nouveau mot de passe pour <strong style="color:#f8fafc">{{resetPasswordUser?.prenom}} {{resetPasswordUser?.nom}}</strong>
+      </p>
+      <div class="modal-field">
+        <label>Nouveau mot de passe</label>
+        <input type="password" class="modal-input" [(ngModel)]="newPassword" placeholder="Min. 6 caractères"/>
+      </div>
+      <div class="modal-field" style="margin-top:12px">
+        <label>Confirmer</label>
+        <input type="password" class="modal-input" [(ngModel)]="confirmNewPassword" placeholder="Confirmer"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" (click)="showResetModal = false">Annuler</button>
+      <button class="btn-modal-save" (click)="resetPassword()" [disabled]="modalLoading">
+        <span *ngIf="!modalLoading"><i class="bi bi-key-fill me-1"></i> Réinitialiser</span>
+        <span *ngIf="modalLoading"><i class="bi bi-arrow-clockwise spin-icon me-1"></i></span>
+      </button>
+    </div>
+  </div>
+</div>

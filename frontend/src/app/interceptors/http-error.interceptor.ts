@@ -21,15 +21,23 @@ export class HttpErrorInterceptor implements HttpInterceptor {
             return throwError(() => err);
           }
 
-          // Real session expiry: clear tokens and redirect to appropriate login
+          // Determine which session expired and redirect accordingly
+          const hadAdminSession = !!localStorage.getItem('adminToken');
           const hadEmployeeSession = !!localStorage.getItem('employeeToken');
+
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminUser');
           localStorage.removeItem('managerToken');
           localStorage.removeItem('currentManager');
           localStorage.removeItem('employeeToken');
           localStorage.removeItem('currentEmployee');
 
           this.toast.error('Session expirée. Veuillez vous reconnecter.');
-          this.router.navigate([hadEmployeeSession ? '/employee-login' : '/manager-login']);
+          if (hadAdminSession) {
+            this.router.navigate(['/admin/login']);
+          } else {
+            this.router.navigate([hadEmployeeSession ? '/employee-login' : '/manager-login']);
+          }
 
         } else if (err.status === 403) {
           this.toast.error("Accès refusé. Vous n'avez pas les permissions nécessaires.");

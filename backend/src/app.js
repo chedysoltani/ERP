@@ -66,6 +66,7 @@ const documentRoutes = require('./routes/documents');
 const analyticsRoutes = require('./routes/analytics');
 const iaRoutes = require('./routes/ia');
 const attendanceRoutes = require('./routes/attendance');
+const adminRoutes = require('./routes/admin');
 
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
@@ -79,6 +80,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ia', iaRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/admin', adminRoutes);
 
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

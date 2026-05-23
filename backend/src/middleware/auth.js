@@ -34,4 +34,11 @@ const isEmployee = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, isManager, isEmployee };
+const isAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Accès refusé. Rôle Administrateur requis.' });
+  }
+  next();
+};
+
+module.exports = { auth, isManager, isEmployee, isAdmin };
