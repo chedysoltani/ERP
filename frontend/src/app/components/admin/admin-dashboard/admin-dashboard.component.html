@@ -399,8 +399,14 @@
         <div class="page-header">
           <div>
             <h2 class="page-title">Rôles & Permissions</h2>
-            <p class="page-subtitle">Contrôle des accès par rôle</p>
+            <p class="page-subtitle">Contrôle des accès par rôle — persisté en base</p>
           </div>
+          <button class="btn-primary-action" (click)="savePermissions()">
+            <i class="bi bi-check-circle-fill me-2"></i>Sauvegarder
+          </button>
+        </div>
+        <div class="settings-saved-banner" [class.visible]="permissionsSaved">
+          <i class="bi bi-check-circle-fill"></i> Permissions sauvegardées en base de données
         </div>
 
         <!-- Role selector tabs -->

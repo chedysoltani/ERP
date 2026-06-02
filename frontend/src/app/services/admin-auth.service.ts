@@ -117,4 +117,20 @@ export class AdminAuthService {
   getGrowth(): Observable<any> {
     return this.http.get(`${this.apiUrl}/admin/growth`, { headers: this.headers() });
   }
+
+  getPermissions(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/admin/permissions`, { headers: this.headers() });
+  }
+
+  savePermissions(permissions: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/admin/permissions`, { permissions }, { headers: this.headers() });
+  }
+
+  getSettings(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/admin/settings`, { headers: this.headers() });
+  }
+
+  saveSettings(settings: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/admin/settings`, settings, { headers: this.headers() });
+  }
 }

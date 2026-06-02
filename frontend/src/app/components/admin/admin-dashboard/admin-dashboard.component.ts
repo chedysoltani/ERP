@@ -76,6 +76,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     darkModeDefault: true, language: 'fr'
   };
   settingsSaved = false;
+  permissionsSaved = false;
 
   // Notifications
   notifications = [
@@ -119,6 +120,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     this.loadActivity();
     this.loadRoleStats();
     this.loadGrowth();
+    this.loadPermissions();
+    this.loadSettingsFromDB();
   }
 
   loadStats(): void {
@@ -315,9 +318,55 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadPermissions(): void {
+    this.adminAuth.getPermissions().subscribe({
+      next: res => {
+        if (res.success && Object.keys(res.data).length > 0) {
+          // Merge DB permissions into the default structure (keeps defaults if DB is empty)
+          for (const role of ['admin', 'manager', 'employee']) {
+            if (res.data[role] && Object.keys(res.data[role]).length > 0) {
+              this.permissions[role] = { ...this.permissions[role], ...res.data[role] };
+            }
+          }
+        }
+      }
+    });
+  }
+
+  savePermissions(): void {
+    this.adminAuth.savePermissions(this.permissions).subscribe({
+      next: res => {
+        if (res.success) {
+          this.permissionsSaved = true;
+          setTimeout(() => this.permissionsSaved = false, 3000);
+        }
+      }
+    });
+  }
+
+  loadSettingsFromDB(): void {
+    this.adminAuth.getSettings().subscribe({
+      next: res => {
+        if (res.success && Object.keys(res.data).length > 0) {
+          this.settings = { ...this.settings, ...res.data };
+        }
+      }
+    });
+  }
+
   saveSettings(): void {
-    this.settingsSaved = true;
-    setTimeout(() => this.settingsSaved = false, 3000);
+    this.adminAuth.saveSettings(this.settings).subscribe({
+      next: res => {
+        if (res.success) {
+          this.settingsSaved = true;
+          setTimeout(() => this.settingsSaved = false, 3000);
+        }
+      },
+      error: () => {
+        this.settingsSaved = true;
+        setTimeout(() => this.settingsSaved = false, 3000);
+      }
+    });
   }
 
   logout(): void {

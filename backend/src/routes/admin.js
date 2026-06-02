@@ -4,15 +4,36 @@ const { auth, isAdmin } = require('../middleware/auth');
 const User = require('../models/User');
 const db = require('../config/database');
 
-// Stats globales
+// ── Init tables si elles n'existent pas ─────────────────────────────────────
+async function ensureTables() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS admin_settings (
+      key_name VARCHAR(100) PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      role ENUM('admin','manager','employee') NOT NULL,
+      permission VARCHAR(100) NOT NULL,
+      allowed TINYINT(1) NOT NULL DEFAULT 1,
+      UNIQUE KEY uq_role_perm (role, permission)
+    )
+  `);
+}
+ensureTables().catch(() => {});
+
+// ── STATS ────────────────────────────────────────────────────────────────────
 router.get('/stats', auth, isAdmin, async (req, res) => {
   try {
-    const totalUsersRows   = await db.query('SELECT COUNT(*) as v FROM users');
-    const activeEmpRows    = await db.query("SELECT COUNT(*) as v FROM users WHERE role='employee' AND actif=1");
-    const activeMgrRows    = await db.query("SELECT COUNT(*) as v FROM users WHERE role='manager' AND actif=1");
-    const totalAdminRows   = await db.query("SELECT COUNT(*) as v FROM users WHERE role='admin'");
-    const todayLoginRows   = await db.query("SELECT COUNT(*) as v FROM users WHERE DATE(date_modification)=CURDATE()");
-    const inactiveRows     = await db.query("SELECT COUNT(*) as v FROM users WHERE actif=0");
+    const totalUsersRows = await db.query('SELECT COUNT(*) as v FROM users');
+    const activeEmpRows  = await db.query("SELECT COUNT(*) as v FROM users WHERE role='employee' AND actif=1");
+    const activeMgrRows  = await db.query("SELECT COUNT(*) as v FROM users WHERE role='manager' AND actif=1");
+    const totalAdminRows = await db.query("SELECT COUNT(*) as v FROM users WHERE role='admin'");
+    const todayLoginRows = await db.query("SELECT COUNT(*) as v FROM users WHERE DATE(date_modification)=CURDATE()");
+    const inactiveRows   = await db.query("SELECT COUNT(*) as v FROM users WHERE actif=0");
 
     let attendanceToday = 0;
     try {
@@ -37,7 +58,7 @@ router.get('/stats', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Tous les utilisateurs
+// ── USERS ────────────────────────────────────────────────────────────────────
 router.get('/users', auth, isAdmin, async (req, res) => {
   try {
     const rows = await db.query(
@@ -49,7 +70,6 @@ router.get('/users', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Créer utilisateur
 router.post('/users', auth, isAdmin, async (req, res) => {
   try {
     const { nom, prenom, email, password, telephone, role } = req.body;
@@ -65,14 +85,14 @@ router.post('/users', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Modifier utilisateur
 router.put('/users/:id', auth, isAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
     const { nom, prenom, email, telephone, role } = req.body;
     if (!nom || !prenom || !email || !role) {
       return res.status(400).json({ success: false, message: 'Champs obligatoires manquants.' });
     }
+    // parseInt fixes: DB id (number) vs req.params.id (string) comparison in User.update
     const updated = await User.update(id, { nom, prenom, email, telephone, role });
     if (!updated) return res.status(404).json({ success: false, message: 'Utilisateur non trouvé.' });
     res.json({ success: true, message: 'Utilisateur mis à jour.' });
@@ -81,7 +101,6 @@ router.put('/users/:id', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Activer/Désactiver utilisateur
 router.patch('/users/:id/toggle', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,7 +114,6 @@ router.patch('/users/:id/toggle', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Réinitialiser mot de passe
 router.patch('/users/:id/reset-password', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -112,7 +130,6 @@ router.patch('/users/:id/reset-password', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Supprimer utilisateur
 router.delete('/users/:id', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -126,7 +143,7 @@ router.delete('/users/:id', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Logs d'activité récente
+// ── ACTIVITY ─────────────────────────────────────────────────────────────────
 router.get('/activity', auth, isAdmin, async (req, res) => {
   try {
     const rows = await db.query(
@@ -139,7 +156,7 @@ router.get('/activity', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Stats par rôle
+// ── ANALYTICS ────────────────────────────────────────────────────────────────
 router.get('/role-stats', auth, isAdmin, async (req, res) => {
   try {
     const rows = await db.query(
@@ -151,7 +168,6 @@ router.get('/role-stats', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Croissance utilisateurs (7 derniers jours)
 router.get('/growth', auth, isAdmin, async (req, res) => {
   try {
     const rows = await db.query(
@@ -160,6 +176,71 @@ router.get('/growth', auth, isAdmin, async (req, res) => {
        GROUP BY DATE(date_creation) ORDER BY day ASC`
     );
     res.json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ── PERMISSIONS (persistées en DB) ───────────────────────────────────────────
+router.get('/permissions', auth, isAdmin, async (req, res) => {
+  try {
+    const rows = await db.query('SELECT role, permission, allowed FROM role_permissions');
+    // Retourne un objet { admin: {perm: bool}, manager: {...}, employee: {...} }
+    const result = { admin: {}, manager: {}, employee: {} };
+    for (const row of rows) {
+      if (result[row.role]) result[row.role][row.permission] = !!row.allowed;
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/permissions', auth, isAdmin, async (req, res) => {
+  try {
+    const { permissions } = req.body; // { admin: {perm: bool}, manager: {...}, ... }
+    if (!permissions) return res.status(400).json({ success: false, message: 'Données manquantes.' });
+    for (const [role, perms] of Object.entries(permissions)) {
+      for (const [permission, allowed] of Object.entries(perms)) {
+        await db.query(
+          `INSERT INTO role_permissions (role, permission, allowed)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE allowed=VALUES(allowed)`,
+          [role, permission, allowed ? 1 : 0]
+        );
+      }
+    }
+    res.json({ success: true, message: 'Permissions sauvegardées.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ── SETTINGS (persistés en DB) ───────────────────────────────────────────────
+router.get('/settings', auth, isAdmin, async (req, res) => {
+  try {
+    const rows = await db.query('SELECT key_name, value FROM admin_settings');
+    const data = {};
+    for (const row of rows) {
+      try { data[row.key_name] = JSON.parse(row.value); } catch { data[row.key_name] = row.value; }
+    }
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/settings', auth, isAdmin, async (req, res) => {
+  try {
+    const settings = req.body;
+    for (const [key, value] of Object.entries(settings)) {
+      await db.query(
+        `INSERT INTO admin_settings (key_name, value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE value=VALUES(value), updated_at=NOW()`,
+        [key, JSON.stringify(value)]
+      );
+    }
+    res.json({ success: true, message: 'Paramètres sauvegardés.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
