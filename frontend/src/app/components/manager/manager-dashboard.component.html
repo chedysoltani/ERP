@@ -308,60 +308,133 @@
           </div>
         </div>
 
-        <div class="projects-grid">
-          <div *ngFor="let project of recentProjects" class="project-card">
-            <div class="project-header">
-              <h3 class="project-title">{{ project.name }}</h3>
-              <span class="project-status" [class]="'status-' + project.status">
-                {{ project.status === 'active' ? 'Actif' : 'En pause' }}
-              </span>
-            </div>
-            
-            <div class="project-body">
-              <div class="project-progress">
-                <div class="progress-info">
-                  <span class="progress-label">Progression</span>
-                  <span class="progress-value">{{ project.progress }}%</span>
-                </div>
-                <div class="progress-bar">
-                  <div class="progress-fill" 
-                       [style.width.%]="project.progress"
-                       [ngStyle]="{ 'background-color': getStatusColor(project.status) }">
+        <!-- Liste projets enrichie (F-01) -->
+        <div class="projects-list-table">
+          <table class="proj-table">
+            <thead>
+              <tr>
+                <th>Projet</th>
+                <th>État / Équipe</th>
+                <th>Dates</th>
+                <th>Planifiées</th>
+                <th>Consommées</th>
+                <th>Progression</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let project of recentProjects" class="proj-row">
+                <!-- Nom + badges retard -->
+                <td class="proj-name-cell">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <strong>{{ project.name }}</strong>
+                    <span *ngIf="project.is_late" style="background:#fee2e2;color:#b91c1c;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">
+                      <i class="bi bi-exclamation-triangle-fill"></i> EN RETARD
+                    </span>
                   </div>
-                </div>
-              </div>
+                  <div class="proj-desc">{{ project.description | slice:0:50 }}{{ (project.description?.length ?? 0) > 50 ? '…' : '' }}</div>
+                  <!-- Tâches -->
+                  <div style="display:flex;gap:8px;margin-top:4px;font-size:11px">
+                    <span style="color:#10b981"><i class="bi bi-check-circle-fill"></i> {{ project.done_tasks || 0 }}</span>
+                    <span style="color:#6366f1"><i class="bi bi-play-circle-fill"></i> {{ project.in_progress_tasks || 0 }}</span>
+                    <span style="color:#94a3b8"><i class="bi bi-circle"></i> {{ project.todo_tasks || 0 }}</span>
+                    <span *ngIf="(project.late_tasks || 0) > 0" style="color:#ef4444"><i class="bi bi-clock-history"></i> {{ project.late_tasks }} en retard</span>
+                    <span style="color:#64748b">/ {{ project.total_tasks || 0 }} tâches</span>
+                  </div>
+                </td>
 
-              <div class="project-meta">
-                <div class="meta-item">
-                  <i class="bi bi-people"></i>
-                  <span>{{ project.team }} membres</span>
-                </div>
-                <div class="meta-item">
-                  <i class="bi bi-calendar"></i>
-                  <span>{{ project.deadline | date:'dd MMM yyyy' }}</span>
-                </div>
-              </div>
+                <!-- Statut -->
+                <td>
+                  <span class="status-badge" [ngClass]="'status-badge-' + (project.status_color || 'gray')">
+                    {{ project.status_display || project.status }}
+                  </span>
+                  <div style="margin-top:4px;font-size:11px;color:#94a3b8">
+                    <i class="bi bi-people-fill"></i> {{ project.team_members_count || 0 }} membre(s)
+                  </div>
+                </td>
 
-              <div class="project-actions">
-                <button class="btn-action" (click)="viewProject(project)">
-                  <i class="bi bi-eye"></i>
-                  Voir
-                </button>
-                <button class="btn-action" (click)="editProject(project)">
-                  <i class="bi bi-pencil"></i>
-                  Modifier
-                </button>
-                <button class="btn-action text-danger" (click)="deleteProject(project)">
-                  <i class="bi bi-trash"></i>
-                  Supprimer
-                </button>
-              </div>
-            </div>
+                <!-- Dates -->
+                <td class="proj-dates">
+                  <div><i class="bi bi-play-circle"></i> {{ (project.start_date || project.startDate) | date:'dd/MM/yy' }}</div>
+                  <div [style.color]="project.deadline_late ? '#ef4444' : 'inherit'">
+                    <i class="bi bi-stop-circle"></i> {{ (project.end_date || project.endDate) | date:'dd/MM/yy' }}
+                  </div>
+                </td>
+
+                <!-- Heures planifiées -->
+                <td class="proj-hours">
+                  <span class="hours-val">{{ project.planned_hours || 0 }}h</span>
+                </td>
+
+                <!-- Heures consommées + barre -->
+                <td class="proj-hours">
+                  <span class="hours-val consumed" [style.color]="project.hours_over_budget ? '#ef4444' : '#10b981'">
+                    {{ project.consumed_hours || 0 }}h
+                  </span>
+                  <span *ngIf="project.hours_over_budget" style="font-size:10px;color:#ef4444;display:block">dépassement</span>
+                  <div class="mini-progress-bar" *ngIf="(project.planned_hours || 0) > 0">
+                    <div class="mini-progress-fill"
+                         [style.width.%]="getConsumptionPct(project)"
+                         [ngClass]="getConsumptionPct(project) > 100 ? 'danger' : 'ok'"></div>
+                  </div>
+                </td>
+
+                <!-- Progression globale -->
+                <td style="min-width:110px">
+                  <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+                    <span style="color:#94a3b8">Tâches</span>
+                    <span style="font-weight:700;color:#f1f5f9">{{ project.progress_tasks || 0 }}%</span>
+                  </div>
+                  <div style="background:#334155;border-radius:4px;height:6px;overflow:hidden">
+                    <div [style.width.%]="project.progress_tasks || 0"
+                         [style.background]="(project.progress_tasks || 0) >= 100 ? '#10b981' : '#6366f1'"
+                         style="height:100%;border-radius:4px;transition:width .4s"></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;margin-bottom:2px">
+                    <span style="color:#94a3b8">Heures</span>
+                    <span [style.color]="project.hours_over_budget ? '#ef4444' : '#f1f5f9'" style="font-weight:700">{{ project.progress_hours || 0 }}%</span>
+                  </div>
+                  <div style="background:#334155;border-radius:4px;height:4px;overflow:hidden">
+                    <div [style.width.%]="project.progress_hours || 0"
+                         [style.background]="project.hours_over_budget ? '#ef4444' : '#f59e0b'"
+                         style="height:100%;border-radius:4px;transition:width .4s"></div>
+                  </div>
+                </td>
+
+                <!-- Actions -->
+                <td class="proj-actions-cell">
+                  <button class="btn-sm btn-consult" (click)="consultProject(project)" title="Consulter la fiche">
+                    <i class="bi bi-eye"></i> Consulter
+                  </button>
+                  <button class="btn-sm btn-edit" (click)="editProject(project)" title="Modifier">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-sm btn-del" (click)="deleteProject(project)" title="Supprimer">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="no-projects" *ngIf="recentProjects.length === 0">
+            <i class="bi bi-folder-x"></i>
+            <p>Aucun projet. Créez votre premier projet.</p>
           </div>
         </div>
       </div>
 
       <!-- ━━ TÃƒâ€šCHES ━━ -->
+      <!-- ━━ FICHE PROJET (F-02, F-12, F-13) ━━ -->
+      <div *ngIf="activeSection === 'fiche-projet'" class="section fade-in">
+        <button class="btn-back" (click)="navigate('projets')">
+          <i class="bi bi-arrow-left"></i> Retour aux projets
+        </button>
+        <app-project-detail
+          *ngIf="selectedProjectForKpi"
+          [projectId]="selectedProjectForKpi">
+        </app-project-detail>
+      </div>
+
       <div *ngIf="activeSection === 'taches'" class="section fade-in">
         <div class="kanban-header">
           <div class="header-actions">
@@ -1133,19 +1206,31 @@
           </div>
 
           <div class="form-row">
-            <div class="form-group">
-              <label for="projectTeam">Équipe assignée *</label>
-              <select 
-                id="projectTeam" 
-                name="projectTeam"
-                [(ngModel)]="newProject.team" 
-                required
-                class="form-select">
-                <option value="">Sélectionner une équipe</option>
-                <option *ngFor="let user of allUsers" [value]="user.prenom + ' ' + user.nom">
-                  Équipe de {{ user.prenom }} {{ user.nom }}
-                </option>
-              </select>
+            <div class="form-group" style="position:relative">
+              <label>Membres de l'équipe * <span *ngIf="newProject.team_member_ids.length > 0" style="color:#6366f1;font-weight:600">({{ newProject.team_member_ids.length }} sélectionné(s))</span></label>
+              <button type="button" class="form-select" style="text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+                (click)="showNewProjectTeamDropdown = !showNewProjectTeamDropdown">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%">{{ getNewProjectTeamLabel() }}</span>
+                <i class="bi" [ngClass]="showNewProjectTeamDropdown ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+              </button>
+              <div *ngIf="showNewProjectTeamDropdown" style="position:absolute;z-index:1000;background:#1e293b;border:1px solid #334155;border-radius:8px;width:100%;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+                <div style="max-height:200px;overflow-y:auto">
+                  <label *ngFor="let user of allUsers"
+                    style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s"
+                    [style.background]="isNewProjectMember(user.id) ? 'rgba(99,102,241,.15)' : 'transparent'">
+                    <input type="checkbox" [checked]="isNewProjectMember(user.id)" (change)="toggleNewProjectMember(user.id)" style="accent-color:#6366f1;width:16px;height:16px">
+                    <span style="color:#e2e8f0">{{ user.prenom }} {{ user.nom }}</span>
+                    <span style="color:#94a3b8;font-size:.75rem;margin-left:auto">{{ user.role }}</span>
+                  </label>
+                </div>
+                <div style="border-top:1px solid #334155;padding:8px 14px;display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#94a3b8;font-size:.8rem">{{ newProject.team_member_ids.length }} sélectionné(s)</span>
+                  <button type="button" (click)="showNewProjectTeamDropdown = false"
+                    style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:.8rem;cursor:pointer">
+                    Confirmer
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -1336,19 +1421,31 @@
           </div>
 
           <div class="form-row">
-            <div class="form-group">
-              <label for="editProjectTeam">Équipe assignée *</label>
-              <select 
-                id="editProjectTeam" 
-                name="editProjectTeam"
-                [(ngModel)]="projectToEdit.team" 
-                required
-                class="form-select">
-                <option value="">Sélectionner une équipe</option>
-                <option value="Équipe A">Équipe A</option>
-                <option value="Équipe B">Équipe B</option>
-                <option value="Équipe C">Équipe C</option>
-              </select>
+            <div class="form-group" style="position:relative">
+              <label>Membres de l'équipe <span *ngIf="(projectToEdit.team_member_ids||[]).length > 0" style="color:#6366f1;font-weight:600">({{ (projectToEdit.team_member_ids||[]).length }} sélectionné(s))</span></label>
+              <button type="button" class="form-select" style="text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+                (click)="showEditProjectTeamDropdown = !showEditProjectTeamDropdown">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%">{{ getEditProjectTeamLabel() }}</span>
+                <i class="bi" [ngClass]="showEditProjectTeamDropdown ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+              </button>
+              <div *ngIf="showEditProjectTeamDropdown" style="position:absolute;z-index:1000;background:#1e293b;border:1px solid #334155;border-radius:8px;width:100%;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+                <div style="max-height:200px;overflow-y:auto">
+                  <label *ngFor="let user of allUsers"
+                    style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s"
+                    [style.background]="isEditProjectMember(user.id) ? 'rgba(99,102,241,.15)' : 'transparent'">
+                    <input type="checkbox" [checked]="isEditProjectMember(user.id)" (change)="toggleEditProjectMember(user.id)" style="accent-color:#6366f1;width:16px;height:16px">
+                    <span style="color:#e2e8f0">{{ user.prenom }} {{ user.nom }}</span>
+                    <span style="color:#94a3b8;font-size:.75rem;margin-left:auto">{{ user.role }}</span>
+                  </label>
+                </div>
+                <div style="border-top:1px solid #334155;padding:8px 14px;display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#94a3b8;font-size:.8rem">{{ (projectToEdit.team_member_ids||[]).length }} sélectionné(s)</span>
+                  <button type="button" (click)="showEditProjectTeamDropdown = false"
+                    style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:.8rem;cursor:pointer">
+                    Confirmer
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -1703,25 +1800,50 @@
 
         <div class="form-group">
           <label for="taskDueDate">Date d'échéance</label>
-          <input 
-            type="date" 
-            id="taskDueDate" 
+          <input
+            type="date"
+            id="taskDueDate"
             name="taskDueDate"
-            [(ngModel)]="newTask.due_date" 
+            [(ngModel)]="newTask.due_date"
+            class="form-input">
+        </div>
+      </div>
+
+      <!-- F-03 : Date début + Date fin (obligatoires) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskStartDate">Date de début <span class="required-star">*</span></label>
+          <input
+            type="date"
+            id="taskStartDate"
+            name="taskStartDate"
+            [(ngModel)]="newTask.start_date"
+            required
+            class="form-input">
+        </div>
+        <div class="form-group">
+          <label for="taskEndDate">Date de fin <span class="required-star">*</span></label>
+          <input
+            type="date"
+            id="taskEndDate"
+            name="taskEndDate"
+            [(ngModel)]="newTask.end_date"
+            required
             class="form-input">
         </div>
       </div>
 
       <div class="form-group">
-        <label for="taskEstimatedHours">Heures estimées</label>
-        <input 
-          type="number" 
-          id="taskEstimatedHours" 
+        <label for="taskEstimatedHours">Heures estimées <span class="required-star">*</span></label>
+        <input
+          type="number"
+          id="taskEstimatedHours"
           name="taskEstimatedHours"
-          [(ngModel)]="newTask.estimated_hours" 
-          placeholder="0"
-          min="0"
+          [(ngModel)]="newTask.estimated_hours"
+          placeholder="Ex: 8"
+          min="0.5"
           step="0.5"
+          required
           class="form-input">
       </div>
 
@@ -1834,25 +1956,50 @@
 
         <div class="form-group">
           <label for="editTaskDueDate">Date d'échéance</label>
-          <input 
-            type="date" 
-            id="editTaskDueDate" 
+          <input
+            type="date"
+            id="editTaskDueDate"
             name="editTaskDueDate"
-            [(ngModel)]="taskToEdit.due_date" 
+            [(ngModel)]="taskToEdit.due_date"
+            class="form-input">
+        </div>
+      </div>
+
+      <!-- F-03 : Date début + Date fin (obligatoires) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="editTaskStartDate">Date de début <span class="required-star">*</span></label>
+          <input
+            type="date"
+            id="editTaskStartDate"
+            name="editTaskStartDate"
+            [(ngModel)]="taskToEdit.start_date"
+            required
+            class="form-input">
+        </div>
+        <div class="form-group">
+          <label for="editTaskEndDate">Date de fin <span class="required-star">*</span></label>
+          <input
+            type="date"
+            id="editTaskEndDate"
+            name="editTaskEndDate"
+            [(ngModel)]="taskToEdit.end_date"
+            required
             class="form-input">
         </div>
       </div>
 
       <div class="form-group">
-        <label for="editTaskEstimatedHours">Heures estimées</label>
-        <input 
-          type="number" 
-          id="editTaskEstimatedHours" 
+        <label for="editTaskEstimatedHours">Heures estimées <span class="required-star">*</span></label>
+        <input
+          type="number"
+          id="editTaskEstimatedHours"
           name="editTaskEstimatedHours"
-          [(ngModel)]="taskToEdit.estimated_hours" 
-          placeholder="0"
-          min="0"
+          [(ngModel)]="taskToEdit.estimated_hours"
+          placeholder="Ex: 8"
+          min="0.5"
           step="0.5"
+          required
           class="form-input">
       </div>
 

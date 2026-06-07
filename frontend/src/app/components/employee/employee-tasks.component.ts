@@ -8,11 +8,18 @@ interface Task {
   title: string;
   description: string;
   priority: 'low' | 'medium' | 'high';
-  status: 'todo' | 'in_progress' | 'completed';
+  status: 'todo' | 'in_progress' | 'completed' | 'done';
   due_date: string;
   progress: number;
+  estimated_hours?: number;
+  hours_worked?: number;
+  is_late?: boolean;
+  deadline_late?: boolean;
+  hours_late?: boolean;
   project_name?: string;
   assigned_date?: string;
+  is_blocked?: boolean;
+  blocking_tasks?: { id: number; title: string; status: string }[];
 }
 
 @Component({
@@ -37,14 +44,31 @@ interface Task {
             *ngFor="let task of tasks"
             class="task-card"
             [class.selected]="selectedTask?.id === task.id"
+            [class.task-blocked]="task.is_blocked"
             [class]="getTaskPriorityClass(task.priority)"
-            (click)="selectTask(task)">
+            (click)="!task.is_blocked && selectTask(task)">
 
             <div class="task-header">
               <div class="task-title">{{ task.title }}</div>
-              <div class="task-priority" [class]="'priority-' + task.priority">
-                {{ getPriorityLabel(task.priority) }}
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <span *ngIf="task.is_blocked" class="blocked-badge">
+                  <i class="bi bi-lock-fill"></i> BLOQUÉE
+                </span>
+                <span *ngIf="task.is_late" style="background:#fee2e2;color:#b91c1c;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                  <i class="bi bi-exclamation-triangle-fill"></i> EN RETARD
+                </span>
+                <div class="task-priority" [class]="'priority-' + task.priority">
+                  {{ getPriorityLabel(task.priority) }}
+                </div>
               </div>
+            </div>
+            <!-- Détail des bloquants (F-07) -->
+            <div class="blocking-info" *ngIf="task.is_blocked && task.blocking_tasks?.length">
+              <i class="bi bi-hourglass-split"></i>
+              En attente de :
+              <span *ngFor="let bt of task.blocking_tasks; let last = last">
+                <em>{{ bt.title }}</em><span *ngIf="!last">, </span>
+              </span>
             </div>
 
             <div class="task-description" *ngIf="task.description">
@@ -56,17 +80,28 @@ interface Task {
                 <i class="bi" [ngClass]="getStatusIcon(task.status)"></i>
                 {{ getStatusLabel(task.status) }}
               </div>
-              <div class="task-due-date" *ngIf="task.due_date">
+              <div class="task-due-date" *ngIf="task.due_date" [style.color]="task.deadline_late ? '#b91c1c' : '#6b7280'">
                 <i class="bi bi-calendar"></i>
                 {{ formatDate(task.due_date) }}
               </div>
             </div>
 
-            <div class="task-progress" *ngIf="task.progress !== undefined">
-              <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="task.progress"></div>
+            <!-- Progression heures travaillées / estimées -->
+            <div class="task-progress" *ngIf="(task.estimated_hours || 0) > 0 || task.progress !== undefined">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-size:11px;color:#6b7280">
+                  {{ task.hours_worked || 0 }}h / {{ task.estimated_hours || 0 }}h estimées
+                </span>
+                <span style="font-size:11px;font-weight:700" [style.color]="task.hours_late ? '#b91c1c' : '#374151'">
+                  {{ task.progress || 0 }}%
+                </span>
               </div>
-              <span class="progress-text">{{ task.progress }}%</span>
+              <div class="progress-bar">
+                <div class="progress-fill"
+                  [style.width.%]="task.progress || 0"
+                  [style.background]="task.hours_late ? '#ef4444' : task.progress >= 100 ? '#10b981' : '#3b82f6'">
+                </div>
+              </div>
             </div>
 
             <div class="task-project" *ngIf="task.project_name">
@@ -82,7 +117,8 @@ interface Task {
         <app-employee-time-tracker
           [taskId]="selectedTask.id"
           [employeeId]="currentEmployeeId"
-          [currentTask]="selectedTask">
+          [currentTask]="selectedTask"
+          (taskCompleted)="onTaskCompleted()">
         </app-employee-time-tracker>
       </div>
 
@@ -338,6 +374,13 @@ interface Task {
       font-size: 14px;
     }
 
+    /* F-07 — Tâches bloquées */
+    .task-blocked { opacity: .7; pointer-events: none; border-left-color: #ef4444 !important; background: #fff5f5 !important; }
+    .task-blocked:hover { transform: none !important; box-shadow: none !important; }
+    .blocked-badge { background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; display: flex; align-items: center; gap: 4px; }
+    .blocking-info { font-size: 12px; color: #dc2626; background: #fef2f2; border-radius: 6px; padding: 6px 10px;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     /* Responsive */
     @media (max-width: 768px) {
       .task-grid {
@@ -399,18 +442,20 @@ export class EmployeeTasksComponent implements OnInit {
       return;
     }
 
-    this.employeeService.getEmployeeTasks(this.currentEmployeeId).subscribe({
+    this.employeeService.getEmployeeTasksWithBlocking(this.currentEmployeeId).subscribe({
       next: (response) => {
         if (response.success && Array.isArray(response.data)) {
           this.tasks = response.data;
         } else {
-          console.warn('Réponse inattendue de l\'API des tâches employé:', response);
           this.tasks = [];
         }
       },
-      error: (error) => {
-        console.error('Erreur lors du chargement des tâches employé:', error);
-        this.tasks = [];
+      error: () => {
+        // Fallback vers l'ancienne API
+        this.employeeService.getEmployeeTasks(this.currentEmployeeId!).subscribe({
+          next: (resp) => { this.tasks = resp.success && Array.isArray(resp.data) ? resp.data : []; },
+          error: () => { this.tasks = []; }
+        });
       }
     });
   }
@@ -450,9 +495,15 @@ export class EmployeeTasksComponent implements OnInit {
     switch (status) {
       case 'todo': return 'À faire';
       case 'in_progress': return 'En cours';
-      case 'completed': return 'Terminée';
+      case 'completed':
+      case 'done': return 'Terminée';
       default: return status;
     }
+  }
+
+  onTaskCompleted(): void {
+    this.selectedTask = null;
+    this.loadEmployeeTasks();
   }
 
   formatDate(dateString: string): string {

@@ -2,7 +2,7 @@ import { Component, HostListener, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { forkJoin, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ManagerAuthService, Manager, Project, Meeting } from '../../services/manager-auth.service';
+import { ManagerAuthService, Manager } from '../../services/manager-auth.service';
 import { DocumentsService } from '../../services/documents.service';
 import { AnalyticsService } from '../../services/analytics.service';
 import { TaskEnhancedService } from '../../services/task-enhanced.service';
@@ -12,7 +12,8 @@ import { Document } from '../../models/document.model';
 
 export type SectionId =
   | 'dashboard' | 'projets' | 'taches' | 'gantt' | 'analytics'
-  | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents' | 'planning' | 'presence';
+  | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents' | 'planning' | 'presence'
+  | 'fiche-projet';
 
 interface DisplayProject {
   id: number;
@@ -24,8 +25,26 @@ interface DisplayProject {
   status: string;
   startDate?: string;
   endDate?: string;
+  start_date?: string;
+  end_date?: string;
   budget?: number;
   priority?: string;
+  status_display?: string;
+  status_color?: string;
+  planned_hours?: number;
+  consumed_hours?: number;
+  // Métriques enrichies backend
+  progress_tasks?: number;
+  progress_hours?: number;
+  total_tasks?: number;
+  done_tasks?: number;
+  in_progress_tasks?: number;
+  todo_tasks?: number;
+  late_tasks?: number;
+  team_members_count?: number;
+  is_late?: boolean;
+  deadline_late?: boolean;
+  hours_over_budget?: boolean;
 }
 
 interface CalendarDay {
@@ -77,7 +96,8 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   selectedProject: any = null;
   projectToEdit: any = {
     name: '', description: '', team: '', priority: 'medium',
-    startDate: '', endDate: '', budget: 0
+    startDate: '', endDate: '', budget: 0,
+    team_member_ids: [] as number[]
   };
 
   showCreateMeetingModal = false;
@@ -134,6 +154,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   documents: Document[] = [];
   analyticsData: any = null;
   selectedProjectForAnalytics: number | null = null;
+  selectedProjectForKpi: number | null = null;
 
   totalHours = 0;
   avgHoursPerDay = 0;
@@ -144,15 +165,20 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
 
   newProject = {
     name: '', description: '', team: '', priority: 'medium',
-    startDate: '', endDate: '', budget: 0
+    startDate: '', endDate: '', budget: 0,
+    team_member_ids: [] as number[]
   };
+
+  showNewProjectTeamDropdown = false;
+  showEditProjectTeamDropdown = false;
 
   newTask = {
     title: '', description: '', priority: 'medium',
     assignee_id: null as number | null,
     assignee_ids: [] as number[],
     project_id: null,
-    due_date: '', estimated_hours: 0, tags: [] as string[]
+    due_date: '', start_date: '', end_date: '',
+    estimated_hours: 0, tags: [] as string[]
   };
 
   newUser = { nom: '', prenom: '', email: '', password: '', role: '', telephone: '' };
@@ -204,6 +230,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
     planning:        { title: 'Plannings Sauvegardés',sub: 'Historique des simulations IA' },
     documents:       { title: 'Documents',            sub: 'Gestion des fichiers' },
     presence:        { title: 'Présence & Congés',    sub: 'Pointage équipe, retards, validation' },
+    'fiche-projet':  { title: 'Fiche Projet',          sub: 'Tableau de bord et KPIs' },
   };
 
   get currentTitle() { return this.topbarTitles[this.activeSection]; }
@@ -282,13 +309,35 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
       description: p.description || '',
       progress: p.progress,
       team: p.team,
-      deadline: p.deadline,
+      deadline: p.deadline || p.end_date,
       status: p.status,
-      startDate: p.startDate,
-      endDate: p.endDate,
+      status_display: p.status_display,
+      status_color: p.status_color,
+      startDate: p.start_date || p.startDate,
+      endDate: p.end_date || p.endDate,
+      start_date: p.start_date,
+      end_date: p.end_date,
       budget: p.budget,
-      priority: p.priority
+      priority: p.priority,
+      planned_hours: p.planned_hours,
+      consumed_hours: p.consumed_hours,
+      progress_tasks: p.progress_tasks,
+      progress_hours: p.progress_hours,
+      total_tasks: p.total_tasks,
+      done_tasks: p.done_tasks,
+      in_progress_tasks: p.in_progress_tasks,
+      todo_tasks: p.todo_tasks,
+      late_tasks: p.late_tasks,
+      team_members_count: p.team_members_count,
+      is_late: p.is_late,
+      deadline_late: p.deadline_late,
+      hours_over_budget: p.hours_over_budget
     }));
+  }
+
+  getConsumptionPct(project: any): number {
+    if (!project.planned_hours || project.planned_hours === 0) return 0;
+    return Math.min(100, Math.round((project.consumed_hours / project.planned_hours) * 100));
   }
 
   private processUsers(response: any): void {
@@ -600,7 +649,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   // ─── PROJETS ──────────────────────────────────────────────────────────────
 
   isCreateProjectDisabled(): boolean {
-    return this.loading || !this.newProject.name || !this.newProject.team;
+    return this.loading || !this.newProject.name || this.newProject.team_member_ids.length === 0;
   }
 
   openCreateProjectModal(): void { this.showCreateProjectModal = true; }
@@ -610,35 +659,105 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   closeEditProjectModal(): void {
     this.showEditProjectModal = false;
     this.selectedProject = null;
-    this.projectToEdit = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0 };
+    this.showEditProjectTeamDropdown = false;
+    this.projectToEdit = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0, team_member_ids: [] };
   }
 
   resetProjectForm(): void {
-    this.newProject = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0 };
+    this.newProject = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0, team_member_ids: [] };
+    this.showNewProjectTeamDropdown = false;
+  }
+
+  toggleNewProjectMember(userId: number): void {
+    const idx = this.newProject.team_member_ids.indexOf(userId);
+    if (idx === -1) {
+      this.newProject.team_member_ids = [...this.newProject.team_member_ids, userId];
+    } else {
+      this.newProject.team_member_ids = this.newProject.team_member_ids.filter(id => id !== userId);
+    }
+  }
+
+  isNewProjectMember(userId: number): boolean {
+    return this.newProject.team_member_ids.includes(userId);
+  }
+
+  getNewProjectTeamLabel(): string {
+    if (this.newProject.team_member_ids.length === 0) return 'Sélectionner les membres';
+    return this.allUsers
+      .filter(u => this.newProject.team_member_ids.includes(u.id))
+      .map(u => `${u.prenom} ${u.nom}`)
+      .join(', ');
+  }
+
+  toggleEditProjectMember(userId: number): void {
+    const ids: number[] = this.projectToEdit.team_member_ids || [];
+    const idx = ids.indexOf(userId);
+    if (idx === -1) {
+      this.projectToEdit.team_member_ids = [...ids, userId];
+    } else {
+      this.projectToEdit.team_member_ids = ids.filter((id: number) => id !== userId);
+    }
+  }
+
+  isEditProjectMember(userId: number): boolean {
+    return (this.projectToEdit.team_member_ids || []).includes(userId);
+  }
+
+  getEditProjectTeamLabel(): string {
+    const ids: number[] = this.projectToEdit.team_member_ids || [];
+    if (ids.length === 0) return this.projectToEdit.team || 'Sélectionner les membres';
+    return this.allUsers
+      .filter(u => ids.includes(u.id))
+      .map(u => `${u.prenom} ${u.nom}`)
+      .join(', ');
+  }
+
+  buildTeamStringFromIds(ids: number[]): string {
+    return this.allUsers
+      .filter(u => ids.includes(u.id))
+      .map(u => `${u.prenom} ${u.nom}`)
+      .join(', ');
   }
 
   viewProject(project: any): void { this.selectedProject = project; this.showViewProjectModal = true; }
 
+  consultProject(project: any): void {
+    this.selectedProjectForKpi = project.id;
+    this.navigate('fiche-projet' as any);
+  }
+
   editProject(project: any): void {
     this.selectedProject = project;
+    // Pré-sélectionner les membres dont le nom complet apparaît dans la chaîne team
+    const existingTeamStr: string = project.team || '';
+    const preSelected = this.allUsers
+      .filter(u => existingTeamStr.includes(`${u.prenom} ${u.nom}`))
+      .map(u => u.id);
+    const toDateInput = (val: any) => val ? String(val).split('T')[0] : null;
     this.projectToEdit = {
       name: project.name, description: project.description, team: project.team,
-      priority: project.priority, startDate: project.startDate,
-      endDate: project.endDate, budget: project.budget
+      priority: project.priority,
+      startDate: toDateInput(project.start_date || project.startDate),
+      endDate: toDateInput(project.end_date || project.endDate),
+      budget: project.budget,
+      status: project.status,
+      progress: project.progress,
+      team_member_ids: preSelected
     };
     this.showEditProjectModal = true;
   }
 
   createProject(): void {
-    if (!this.newProject.name || !this.newProject.team) {
+    if (!this.newProject.name || this.newProject.team_member_ids.length === 0) {
       this.toast.warning('Champs obligatoires manquants : nom et équipe sont requis.');
       return;
     }
     this.loading = true;
+    const teamStr = this.buildTeamStringFromIds(this.newProject.team_member_ids);
     this.managerAuthService.createProject({
       name: this.newProject.name,
       description: this.newProject.description,
-      team: this.newProject.team,
+      team: teamStr,
       priority: this.newProject.priority,
       startDate: this.newProject.startDate,
       endDate: this.newProject.endDate,
@@ -660,22 +779,26 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   }
 
   updateProject(): void {
-    if (!this.projectToEdit.name || !this.projectToEdit.team) {
+    if (!this.projectToEdit.name) {
       this.toast.warning('Veuillez remplir les champs obligatoires.');
       return;
     }
+    const ids: number[] = this.projectToEdit.team_member_ids || [];
+    const teamStr = ids.length > 0
+      ? this.buildTeamStringFromIds(ids)
+      : this.projectToEdit.team;
     this.loading = true;
     this.managerAuthService.updateProject(this.selectedProject.id, {
       name: this.projectToEdit.name,
       description: this.projectToEdit.description || null,
-      team: this.projectToEdit.team,
+      team: teamStr,
       priority: this.projectToEdit.priority || 'medium',
       startDate: this.projectToEdit.startDate || null,
       endDate: this.projectToEdit.endDate || null,
       budget: this.projectToEdit.budget || null,
       deadline: this.projectToEdit.endDate || null,
-      status: 'active',
-      progress: 0
+      status: this.projectToEdit.status || this.selectedProject.status || 'active',
+      progress: this.projectToEdit.progress ?? this.selectedProject.progress ?? 0
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({
@@ -713,7 +836,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   closeCreateTaskModal(): void { this.showCreateTaskModal = false; this.resetTaskForm(); }
 
   resetTaskForm(): void {
-    this.newTask = { title: '', description: '', priority: 'medium', assignee_id: null, assignee_ids: [], project_id: null, due_date: '', estimated_hours: 0, tags: [] };
+    this.newTask = { title: '', description: '', priority: 'medium', assignee_id: null, assignee_ids: [], project_id: null, due_date: '', start_date: '', end_date: '', estimated_hours: 0, tags: [] };
   }
 
   isAddDocumentDisabled(): boolean {
@@ -736,14 +859,28 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
       this.toast.warning('Le titre de la tâche est obligatoire.');
       return;
     }
+    if (!this.newTask.start_date || !this.newTask.end_date) {
+      this.toast.warning('La date de début et la date de fin sont obligatoires.');
+      return;
+    }
+    if (this.newTask.end_date < this.newTask.start_date) {
+      this.toast.warning('La date de fin doit être >= à la date de début.');
+      return;
+    }
+    if (!this.newTask.estimated_hours || this.newTask.estimated_hours <= 0) {
+      this.toast.warning('Les heures estimées sont obligatoires et doivent être > 0.');
+      return;
+    }
     const taskData = {
       ...this.newTask,
       creator_id: this.currentManager?.id,
       assignee_ids: this.newTask.assignee_ids?.length ? [...this.newTask.assignee_ids] : (this.newTask.assignee_id ? [this.newTask.assignee_id] : []),
       assignee_id: this.newTask.assignee_ids?.length ? this.newTask.assignee_ids[0] : (this.newTask.assignee_id || null),
       project_id: this.newTask.project_id || null,
-      due_date: this.newTask.due_date || null,
-      estimated_hours: this.newTask.estimated_hours || null,
+      start_date: this.newTask.start_date,
+      end_date: this.newTask.end_date,
+      due_date: this.newTask.end_date,
+      estimated_hours: this.newTask.estimated_hours,
       tags: this.newTask.tags.length > 0 ? JSON.stringify(this.newTask.tags) : null
     };
     this.managerAuthService.createTask(taskData)
@@ -921,7 +1058,16 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   submitTaskEdit(): void {
     if (!this.taskToEdit.title) { this.toast.warning('Le titre de la tâche est obligatoire.'); return; }
 
-    let formattedDueDate = this.taskToEdit.due_date;
+    if (!this.taskToEdit.start_date || !this.taskToEdit.end_date) {
+      this.toast.warning('La date de début et la date de fin sont obligatoires.');
+      return;
+    }
+    if (this.taskToEdit.end_date < this.taskToEdit.start_date) {
+      this.toast.warning('La date de fin doit être >= à la date de début.');
+      return;
+    }
+
+    let formattedDueDate = this.taskToEdit.end_date || this.taskToEdit.due_date;
     if (formattedDueDate?.includes('/')) {
       const parts = formattedDueDate.split('/');
       if (parts.length === 3) formattedDueDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
@@ -940,6 +1086,8 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
       priority: this.taskToEdit.priority || 'medium',
       assignee_id: assignmentRows.length ? assignmentRows[0].employee_id : null,
       project_id: this.taskToEdit.project_id || null,
+      start_date: this.taskToEdit.start_date,
+      end_date: this.taskToEdit.end_date,
       due_date: formattedDueDate || null,
       estimated_hours: this.taskToEdit.estimated_hours || null,
       tags: (() => {
@@ -965,7 +1113,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
       });
   }
 
-  updateTaskStatus(taskId: number, newStatus: string): void {
+  updateTaskStatus(_taskId: number, newStatus: string): void {
     if (!this.draggedTask?.id) { this.toast.error('Tâche invalide.'); return; }
     this.managerAuthService.updateTaskStatus(this.draggedTask.id, newStatus)
       .pipe(takeUntil(this.destroy$))

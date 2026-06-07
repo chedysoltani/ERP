@@ -1,5 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
 
+/* F-11 : bouton + modale heures */
+.btn-declare-hours {
+  background: #10b981; color: #fff; border: none; border-radius: 8px;
+  padding: .45rem 1rem; cursor: pointer; font-size: .85rem; font-weight: 600;
+  display: flex; align-items: center; gap: .4rem; white-space: nowrap;
+}
+.btn-declare-hours:hover { background: #059669; }
+.hours-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.hours-modal-content { width: 100%; max-width: 560px; }
+
 /* ══ DOCUMENTS SECTION (Employee) ══ */
 .documents-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;

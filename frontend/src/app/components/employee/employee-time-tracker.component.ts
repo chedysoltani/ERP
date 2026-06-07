@@ -514,7 +514,6 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
   ngOnInit() {
     if (this.taskId) {
       this.loadSessions();
-      this.checkActiveSession();
     }
     if (this.employeeId) {
       this.loadTodaysSessions();
@@ -531,6 +530,7 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
     this.taskEnhancedService.getTaskTimeSessions(this.taskId).subscribe({
       next: (response) => {
         this.sessions = response.data || [];
+        this.restoreActiveSession();
       },
       error: (error) => {
         console.error('Erreur lors du chargement des sessions:', error);
@@ -540,7 +540,6 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
 
   loadTodaysSessions() {
     if (!this.employeeId) return;
-    
     this.taskEnhancedService.getTodaySessionsByEmployee(this.employeeId).subscribe({
       next: (response) => {
         this.todayTasksSessions = response.data?.sessions || [];
@@ -551,11 +550,22 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
     });
   }
 
-  checkActiveSession() {
-    const runningSession = this.sessions.find(s => s.status === 'running');
-    if (runningSession) {
-      this.activeSession = runningSession;
+  // Restaure l'état du chrono après navigation (running → reprend le timer, paused → affiche "Reprendre")
+  restoreActiveSession() {
+    const running = this.sessions.find(s => s.status === 'running');
+    if (running) {
+      this.activeSession = running;
+      // Recalcule le temps écoulé depuis le vrai start_time
+      const elapsed = Math.floor((Date.now() - new Date(running.start_time).getTime()) / 1000);
+      this.elapsedTime = (running.duration_seconds || 0) + elapsed;
       this.startTimer();
+      return;
+    }
+    const paused = this.sessions.find(s => s.status === 'paused');
+    if (paused) {
+      this.activeSession = paused;
+      this.elapsedTime = paused.duration_seconds || 0;
+      // Pas de timer — session en pause
     }
   }
 
@@ -585,6 +595,12 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
         this.startTimer();
         if (this.currentTask) {
           this.currentTask.status = 'in_progress';
+          // hours_worked already set from API; live timer will update progress
+          if (!this.currentTask.estimated_hours || this.currentTask.estimated_hours === 0) {
+            this.currentTask.progress = Math.max(this.currentTask.progress || 0, 50);
+          }
+          if (this.currentTask.hours_worked === undefined) this.currentTask.hours_worked = 0;
+          this.elapsedTime = 0;
         }
       },
       error: (error) => {
@@ -638,11 +654,12 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
           this.activeSession = null;
           this.stopTimer();
           this.elapsedTime = 0;
-          
+
           if (this.currentTask) {
             this.currentTask.status = 'done';
+            this.currentTask.progress = 100;
           }
-          
+
           this.loadSessions();
           this.loadTodaysSessions();
           this.taskCompleted.emit({ taskId: this.taskId, hours });
@@ -660,6 +677,15 @@ export class EmployeeTimeTrackerComponent implements OnInit, OnDestroy {
     this.timerInterval = setInterval(() => {
       if (this.activeSession && this.activeSession.status === 'running') {
         this.elapsedTime++;
+        // Mise à jour en temps réel de la progression de la tâche
+        if (this.currentTask && this.currentTask.estimated_hours > 0) {
+          const baseHours = this.currentTask.hours_worked || 0;
+          const sessionHours = this.elapsedTime / 3600;
+          const totalHours = baseHours + sessionHours;
+          this.currentTask.progress = Math.min(100, Math.round((totalHours / this.currentTask.estimated_hours) * 100));
+          this.currentTask.hours_late = totalHours > this.currentTask.estimated_hours;
+          this.currentTask.is_late = this.currentTask.hours_late || this.currentTask.deadline_late;
+        }
       }
     }, 1000);
   }

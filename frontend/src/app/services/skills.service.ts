@@ -2,21 +2,22 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError, tap } from 'rxjs/operators';
-import { 
-  EmployeeSkillsProfile, 
-  Skill, 
-  Technology, 
+import { environment } from '../../environments/environment';
+import {
+  EmployeeSkillsProfile,
+  Skill,
+  Technology,
   Speciality,
   SkillCategory,
   SKILL_CATEGORIES,
-  TECHNOLOGY_CATEGORIES 
+  TECHNOLOGY_CATEGORIES
 } from '../models/skills.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SkillsService {
-  private apiUrl = 'http://localhost:3001/api/employee';
+  private apiUrl = `${environment.apiUrl}/employee`;
 
   constructor(private http: HttpClient) {}
 

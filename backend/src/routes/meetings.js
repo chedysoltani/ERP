@@ -1,24 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-
-// Middleware pour vérifier l'authentification
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Token d\'authentification manquant' });
-  }
-
-  // TODO: Implémenter la vérification du token JWT
-  // Pour l'instant, on simule une authentification réussie
-  req.user = { id: 1 }; // Simuler l'utilisateur connecté
-  next();
-};
+const { auth } = require('../middleware/auth');
 
 // Créer une nouvelle réunion
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
     const {
       title,
@@ -168,7 +154,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Récupérer toutes les réunions d'un manager
-router.get('/manager/:managerId', authenticateToken, async (req, res) => {
+router.get('/manager/:managerId', auth, async (req, res) => {
   try {
     const { managerId } = req.params;
     
@@ -203,7 +189,7 @@ router.get('/manager/:managerId', authenticateToken, async (req, res) => {
 });
 
 // Récupérer les réunions à venir d'un manager
-router.get('/upcoming/manager/:managerId', authenticateToken, async (req, res) => {
+router.get('/upcoming/manager/:managerId', auth, async (req, res) => {
   try {
     const { managerId } = req.params;
     
@@ -241,7 +227,7 @@ router.get('/upcoming/manager/:managerId', authenticateToken, async (req, res) =
 });
 
 // Mettre à jour une réunion
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -396,7 +382,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Supprimer une réunion
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -438,7 +424,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Récupérer une réunion spécifique
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -475,7 +461,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Récupérer les réunions assignées à un employé
-router.get('/employee/:employeeId', authenticateToken, async (req, res) => {
+router.get('/employee/:employeeId', auth, async (req, res) => {
   try {
     const { employeeId } = req.params;
     
@@ -513,7 +499,7 @@ router.get('/employee/:employeeId', authenticateToken, async (req, res) => {
 });
 
 // Mettre à jour le statut de participation d'un employé
-router.put('/:meetingId/employee/:employeeId/status', authenticateToken, async (req, res) => {
+router.put('/:meetingId/employee/:employeeId/status', auth, async (req, res) => {
   try {
     const { meetingId, employeeId } = req.params;
     const { status, notes } = req.body;

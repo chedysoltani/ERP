@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { auth, isEmployee } = require('../middleware/auth');
+
+router.use(auth, isEmployee);
 
 const ASSIGNMENT_STATUSES = new Set(['pending', 'in_progress', 'completed']);
 
@@ -119,6 +122,77 @@ async function wouldCreateDependencyCycle(taskId, newDependsOnId) {
     frontier = next;
   }
   return false;
+}
+
+// Recalcule le progress d'un projet à partir des statuts de ses tâches (pondéré par heures estimées)
+async function recalculateProjectProgress(projectId) {
+  if (!projectId) return;
+  try {
+    const tasks = await db.query(
+      'SELECT status, estimated_hours FROM tasks WHERE project_id = ?',
+      [projectId]
+    );
+    if (tasks.length === 0) return;
+    let sumWeighted = 0, sumEstimated = 0;
+    for (const t of tasks) {
+      const est = parseFloat(t.estimated_hours || 1);
+      const w = t.status === 'done' ? 1 : (t.status === 'in_progress' ? 0.5 : 0);
+      sumWeighted += est * w;
+      sumEstimated += est;
+    }
+    const progress = sumEstimated > 0 ? Math.round((sumWeighted / sumEstimated) * 100) : 0;
+    await db.query('UPDATE projects SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [progress, projectId]);
+  } catch (e) {
+    console.warn('recalculateProjectProgress error:', e.message);
+  }
+}
+
+// ── Propagation en cascade des dates (F-06) ────────────────────────────────
+// Quand la date_fin d'une tâche change, recalcule start_date de ses successeurs (FTS)
+async function propagateDatesFromTask(taskId) {
+  const visited = new Set();
+  const queue = [Number(taskId)];
+  while (queue.length) {
+    const currentId = queue.shift();
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const current = await db.query('SELECT id, end_date FROM tasks WHERE id = ?', [currentId]);
+    if (!current.length || !current[0].end_date) continue;
+    const predEndDate = new Date(current[0].end_date);
+
+    const successors = await db.query(
+      `SELECT t.id, t.start_date, td.lag_days
+       FROM task_dependencies td
+       JOIN tasks t ON t.id = td.task_id
+       WHERE td.depends_on_task_id = ? AND td.dependency_type = 'finish_to_start'`,
+      [currentId]
+    );
+
+    for (const succ of successors) {
+      const lagDays = parseInt(succ.lag_days || 0);
+      const minStart = new Date(predEndDate);
+      minStart.setDate(minStart.getDate() + 1 + lagDays);
+      const minStartStr = minStart.toISOString().split('T')[0];
+
+      const currentStart = succ.start_date ? new Date(succ.start_date) : null;
+      if (!currentStart || currentStart < minStart) {
+        // Calculer le décalage à appliquer à end_date aussi
+        const succRow = await db.query('SELECT start_date, end_date FROM tasks WHERE id = ?', [succ.id]);
+        if (succRow.length) {
+          const oldStart = succRow[0].start_date ? new Date(succRow[0].start_date) : minStart;
+          const oldEnd   = succRow[0].end_date   ? new Date(succRow[0].end_date)   : null;
+          const shift = oldEnd ? (oldEnd - oldStart) : 0;
+          const newEnd = oldEnd ? new Date(minStart.getTime() + shift) : null;
+          await db.query(
+            'UPDATE tasks SET start_date = ?, end_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [minStartStr, newEnd ? newEnd.toISOString().split('T')[0] : null, succ.id]
+          );
+          queue.push(succ.id);
+        }
+      }
+    }
+  }
 }
 
 async function recomputeBlockingForProject(projectId) {
@@ -410,6 +484,26 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // F-03 : dates et heures estimées obligatoires
+    if (!start_date || !due_date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les champs date_debut (start_date) et date_fin (due_date) sont obligatoires.'
+      });
+    }
+    if (new Date(due_date) < new Date(start_date)) {
+      return res.status(400).json({
+        success: false,
+        message: 'La date de fin doit être supérieure ou égale à la date de début.'
+      });
+    }
+    if (!estimated_hours || parseFloat(estimated_hours) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le champ heures_estimees est obligatoire et doit être > 0.'
+      });
+    }
+
     const result = await db.query(`
       INSERT INTO tasks (
         title, description, priority, status, assignee_id,
@@ -558,6 +652,14 @@ router.put('/:id', async (req, res) => {
     // Récupérer la tâche mise à jour
     const [updatedTask] = await db.query('SELECT * FROM tasks WHERE id = ?', [id]);
 
+    // F-06 : propagation en cascade si end_date a changé
+    const newEndDate = req.body.end_date || req.body.due_date;
+    const oldEndDate = existingTask[0].end_date || existingTask[0].due_date;
+    if (newEndDate && newEndDate !== oldEndDate) {
+      await propagateDatesFromTask(id);
+      await recomputeBlockingForTasksByIds([id]);
+    }
+
     res.json({
       success: true,
       message: 'Tâche mise à jour avec succès',
@@ -607,15 +709,17 @@ router.put('/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
 
+    const taskRows = await db.query('SELECT project_id FROM tasks WHERE id = ?', [id]);
     await db.query(`
-      UPDATE tasks SET 
-        status = 'done', 
+      UPDATE tasks SET
+        status = 'done', progress = 100,
         end_date = CURRENT_DATE,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [id]);
 
     await recomputeBlockingForTasksByIds([id]);
+    if (taskRows[0]) await recalculateProjectProgress(taskRows[0].project_id);
 
     res.json({
       success: true,
@@ -673,19 +777,21 @@ router.put('/:id/status', async (req, res) => {
       }
     }
 
+    const progressUpdate = status === 'done'
+      ? 100
+      : status === 'in_progress'
+        ? Math.max(existingTask[0].progress || 0, 50)
+        : existingTask[0].progress || 0;
+
     await db.query(
-      `
-      UPDATE tasks SET
-        status = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-      `,
-      [status, id]
+      `UPDATE tasks SET status = ?, progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [status, progressUpdate, id]
     );
 
     console.log(`Statut de la tâche ${id} mis à jour vers: ${status}`);
 
     await recomputeBlockingForTasksByIds([id]);
+    await recalculateProjectProgress(existingTask[0].project_id);
 
     const [updatedTask] = await db.query('SELECT * FROM tasks WHERE id = ?', [id]);
 
@@ -1083,18 +1189,18 @@ router.post('/:id/time-sessions', async (req, res) => {
       [employee_id]
     );
 
-    // Vérifier si une session active (running ou paused) est déjà en cours
-    const activeSessions = await db.query(
+    // Bloquer uniquement si une session est déjà EN COURS (running) — les sessions en pause sont autorisées
+    const runningSessions = await db.query(
       `SELECT id, task_id, status FROM task_time_sessions
-       WHERE employee_id = ? AND status IN ('running', 'paused')`,
+       WHERE employee_id = ? AND status = 'running'`,
       [employee_id]
     );
 
-    if (activeSessions.length > 0) {
-      const active = activeSessions[0];
+    if (runningSessions.length > 0) {
+      const active = runningSessions[0];
       return res.status(409).json({
         success: false,
-        message: `Une session ${active.status === 'running' ? 'en cours' : 'en pause'} existe déjà sur la tâche #${active.task_id}. Terminez ou mettez-la en pause avant d'en démarrer une nouvelle.`,
+        message: `Une session en cours existe déjà sur la tâche #${active.task_id}. Mettez-la en pause ou terminez-la avant d'en démarrer une nouvelle.`,
         data: { activeSessionId: active.id, activeTaskId: active.task_id, activeStatus: active.status }
       });
     }
@@ -1126,7 +1232,12 @@ router.post('/:id/time-sessions', async (req, res) => {
     `, [id, employee_id, description || null]);
 
     // Automatiquement passer la tâche à in_progress
-    await db.query('UPDATE tasks SET status = ? WHERE id = ?', ['in_progress', id]);
+    await db.query(
+      'UPDATE tasks SET status = ?, progress = GREATEST(COALESCE(progress, 0), 50), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      ['in_progress', id]
+    );
+    const [taskRow] = await db.query('SELECT project_id FROM tasks WHERE id = ?', [id]);
+    if (taskRow) await recalculateProjectProgress(taskRow.project_id);
 
     res.json({
       success: true,
@@ -1271,7 +1382,9 @@ router.put('/:id/time-sessions/:sessionId/complete', async (req, res) => {
     `, [duration, id]);
 
     // Passer la tâche à done automatiquement
-    await db.query('UPDATE tasks SET status = ? WHERE id = ?', ['done', id]);
+    await db.query('UPDATE tasks SET status = ?, progress = 100, updated_at = CURRENT_TIMESTAMP WHERE id = ?', ['done', id]);
+    const [completedTaskRow] = await db.query('SELECT project_id FROM tasks WHERE id = ?', [id]);
+    if (completedTaskRow) await recalculateProjectProgress(completedTaskRow.project_id);
 
     // Créer automatiquement une entrée timesheet pour aujourd'hui
     const hours = parseFloat((duration / 3600).toFixed(2));
@@ -1380,6 +1493,93 @@ router.get('/:id/edit-history', async (req, res) => {
       success: false,
       message: 'Erreur lors de la récupération de l\'historique'
     });
+  }
+});
+
+// ── F-07 : tâches d'un employé avec statut bloqué, progression réelle et retard ──
+router.get('/employee/:employeeId/with-blocking', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+
+    const tasks = await db.query(
+      `SELECT t.*, p.name AS project_name
+       FROM tasks t
+       LEFT JOIN projects p ON p.id = t.project_id
+       WHERE t.assignee_id = ?
+          OR EXISTS (SELECT 1 FROM task_assignments ta WHERE ta.task_id = t.id AND ta.employee_id = ?)
+       ORDER BY t.due_date ASC`,
+      [employeeId, employeeId]
+    );
+
+    const enriched = await Promise.all(tasks.map(async (task) => {
+      // ── Prérequis non terminés ────────────────────────────────────────────
+      const blockingDeps = await db.query(
+        `SELECT pt.id, pt.title, pt.status, td.dependency_type
+         FROM task_dependencies td
+         JOIN tasks pt ON pt.id = td.depends_on_task_id
+         WHERE td.task_id = ? AND pt.status != 'done'`,
+        [task.id]
+      );
+
+      // ── Heures travaillées : sessions complétées + entrées daily ─────────
+      const [sessRow] = await db.query(
+        `SELECT COALESCE(SUM(duration_seconds), 0) / 3600 AS sess_hours
+         FROM task_time_sessions WHERE task_id = ? AND status = 'completed'`,
+        [task.id]
+      );
+      const [dailyRow] = await db.query(
+        `SELECT COALESCE(SUM(hours), 0) AS daily_hours FROM daily_time_entries WHERE task_id = ?`,
+        [task.id]
+      );
+      const [runningRow] = await db.query(
+        `SELECT COALESCE(SUM(TIMESTAMPDIFF(SECOND, start_time, NOW())), 0) / 3600 AS running_hours
+         FROM task_time_sessions WHERE task_id = ? AND status = 'running'`,
+        [task.id]
+      );
+
+      const hours_worked = parseFloat(sessRow.sess_hours || 0)
+                         + parseFloat(dailyRow.daily_hours || 0)
+                         + parseFloat(runningRow.running_hours || 0);
+      const estimated_hours = parseFloat(task.estimated_hours || 0);
+
+      // ── Progression ───────────────────────────────────────────────────────
+      let progress;
+      if (task.status === 'done') {
+        progress = 100;
+      } else if (estimated_hours > 0) {
+        progress = Math.min(100, Math.round((hours_worked / estimated_hours) * 100));
+      } else {
+        progress = task.status === 'in_progress' ? 50 : 0;
+      }
+
+      // ── Retard ────────────────────────────────────────────────────────────
+      const deadline_late = task.due_date && task.due_date < today && task.status !== 'done';
+      const hours_late = estimated_hours > 0 && hours_worked > estimated_hours && task.status !== 'done';
+      const is_late = deadline_late || hours_late;
+
+      const is_blocked = blockingDeps.length > 0;
+      const blocking_tasks = blockingDeps.map(d => ({
+        id: d.id, title: d.title, status: d.status, dependency_type: d.dependency_type
+      }));
+
+      return {
+        ...task,
+        progress,
+        hours_worked: Math.round(hours_worked * 100) / 100,
+        estimated_hours,
+        is_late,
+        deadline_late,
+        hours_late,
+        is_blocked,
+        blocking_tasks
+      };
+    }));
+
+    res.json({ success: true, data: enriched });
+  } catch (error) {
+    console.error('Erreur employee with-blocking:', error);
+    res.status(500).json({ success: false, message: 'Erreur récupération tâches employé', error: error.message });
   }
 });
 

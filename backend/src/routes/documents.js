@@ -1,23 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const DocumentsController = require('../controllers/documentsController');
-
-// ---------------------------------------------------------------
-// NOTE : JWT/auth temporairement désactivé pour cette phase de dev.
-// Les guards auth/isManager/isEmployee sont retirés.
-// À réactiver quand le système JWT sera remis en place.
-// ---------------------------------------------------------------
+const { auth, isManager, isEmployee } = require('../middleware/auth');
 
 // Routes Manager
-router.post('/',     DocumentsController.uploadDocument);
-router.get('/',      DocumentsController.getAllDocuments);
-router.put('/:id',   DocumentsController.updateDocument);
-router.delete('/:id',DocumentsController.deleteDocument);
+router.post('/',      auth, isManager, DocumentsController.uploadDocument);
+router.get('/',       auth, isEmployee, DocumentsController.getAllDocuments);
+router.put('/:id',    auth, isManager, DocumentsController.updateDocument);
+router.delete('/:id', auth, isManager, DocumentsController.deleteDocument);
 
 // Routes Employé
-router.get('/employee/:employeeId', DocumentsController.getDocumentsByEmployee);
+router.get('/employee/:employeeId', auth, isEmployee, DocumentsController.getDocumentsByEmployee);
 
 // Route legacy /my (si utilisée côté employé avec query param)
-router.get('/my', DocumentsController.getMyDocuments);
+router.get('/my', auth, isEmployee, DocumentsController.getMyDocuments);
 
 module.exports = router;

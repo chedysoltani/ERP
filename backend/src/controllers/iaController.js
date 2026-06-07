@@ -53,9 +53,17 @@ class IAController {
 
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
+      const today = new Date().toISOString().split('T')[0];
       const prompt = `Tu es un assistant de planification de projets intégré dans un ERP.
 Analyse le cahier des charges fourni et génère un planning structuré en JSON UNIQUEMENT.
 N'ajoute AUCUN texte en dehors du JSON. Le JSON doit être valide et parseable.
+
+RÈGLES IMPORTANTES :
+- La date de début du projet est au plus tôt aujourd'hui : ${today}
+- Pour chaque tâche, fournis OBLIGATOIREMENT : date_debut, date_fin (format ISO 8601 YYYY-MM-DD), heures_estimees (float > 0), prerequis (liste des titres des tâches prérequises parmi les suggestions, vide si aucune)
+- Les dates doivent respecter les dépendances : date_debut(B) >= date_fin(A) + 1 jour pour chaque prérequis A de B
+- heures_estimees doit être cohérent avec la durée et la complexité de la tâche
+- Les dépendances ne doivent pas créer de cycles
 
 CONTENU DU CAHIER DES CHARGES :
 ---BEGIN---
@@ -76,9 +84,12 @@ FORMAT JSON ATTENDU (réponds UNIQUEMENT avec ce JSON) :
         {
           "title": "Titre de la tâche",
           "description": "Description détaillée",
-          "estimatedDays": 5,
+          "date_debut": "YYYY-MM-DD",
+          "date_fin": "YYYY-MM-DD",
+          "heures_estimees": 16.0,
+          "estimatedDays": 2,
           "priority": "low | medium | high",
-          "dependencies": ["Titre d'une autre tâche"],
+          "prerequis": ["Titre d'une tâche prérequise"],
           "role": "Rôle recommandé",
           "status": "not started"
         }
@@ -155,29 +166,66 @@ FORMAT JSON ATTENDU (réponds UNIQUEMENT avec ce JSON) :
       let createdTasks = 0;
       let currentDate = new Date(startDate);
 
+      const taskTitleToId = {};
+
       for (const phase of projectData.phases || []) {
         for (const task of phase.tasks || []) {
           const estimatedDays = parseEstimatedDays(task.estimatedDays || task.estimatedTime);
-          const taskDueDate = addBusinessDays(currentDate, estimatedDays);
-          currentDate = taskDueDate;
 
-          await connection.query(
-            `INSERT INTO tasks (title, description, project_id, status, priority, due_date, estimated_hours, progress, created_at, tags, creator_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
+          // Priorité aux champs IA enrichis (F-08)
+          let taskStartDate, taskDueDate;
+          if (task.date_debut && task.date_fin) {
+            taskStartDate = task.date_debut;
+            taskDueDate = task.date_fin;
+          } else {
+            const end = addBusinessDays(currentDate, estimatedDays);
+            taskStartDate = currentDate.toISOString().split('T')[0];
+            taskDueDate = end.toISOString().split('T')[0];
+            currentDate = end;
+          }
+
+          const estimatedHours = task.heures_estimees || estimatedDays * 8;
+
+          const [taskResult] = await connection.query(
+            `INSERT INTO tasks (title, description, project_id, status, priority, start_date, due_date, end_date, estimated_hours, progress, created_at, tags, creator_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
             [
               `[${phase.name}] ${task.title}`,
               task.description || '',
               projectId,
               'todo',
               task.priority || 'medium',
-              taskDueDate.toISOString().split('T')[0],
-              estimatedDays * 8,
+              taskStartDate,
+              taskDueDate,
+              taskDueDate,
+              estimatedHours,
               0,
               JSON.stringify([task.role || 'Non défini']),
               manager_id
             ]
           );
+          taskTitleToId[task.title] = taskResult.insertId;
           createdTasks++;
+        }
+      }
+
+      // Créer les dépendances entre tâches (F-06 / F-08)
+      for (const phase of projectData.phases || []) {
+        for (const task of phase.tasks || []) {
+          const taskId = taskTitleToId[task.title];
+          if (!taskId) continue;
+          for (const prereqTitle of (task.prerequis || task.dependencies || [])) {
+            const prereqId = taskTitleToId[prereqTitle];
+            if (prereqId && prereqId !== taskId) {
+              try {
+                await connection.query(
+                  `INSERT IGNORE INTO task_dependencies (task_id, depends_on_task_id, dependency_type, lag_days)
+                   VALUES (?, ?, 'finish_to_start', 0)`,
+                  [taskId, prereqId]
+                );
+              } catch (_e) { /* ignore duplicate */ }
+            }
+          }
         }
       }
 

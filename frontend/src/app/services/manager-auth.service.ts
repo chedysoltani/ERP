@@ -35,11 +35,17 @@ export interface Project {
   priority: string;
   startDate: string;
   endDate: string;
+  start_date?: string;
+  end_date?: string;
   budget: number;
   progress: number;
   status: string;
+  status_display?: string;
+  status_color?: string;
   manager_id: number;
   deadline?: string;
+  planned_hours?: number;
+  consumed_hours?: number;
 }
 
 export interface Meeting {

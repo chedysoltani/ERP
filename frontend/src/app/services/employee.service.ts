@@ -34,6 +34,11 @@ export class EmployeeService {
     return this.http.get(`${this.baseUrl}/${employeeId}/tasks`);
   }
 
+  // F-07 : tâches avec statut bloqué et détail des prérequis
+  getEmployeeTasksWithBlocking(employeeId: number): Observable<any> {
+    return this.http.get(`${this.tasksBase}/employee/${employeeId}/with-blocking`);
+  }
+
   // Récupérer les projets de l'employé
   getEmployeeProjects(employeeId: number): Observable<any> {
     return this.http.get(`${this.baseUrl}/${employeeId}/projects`);

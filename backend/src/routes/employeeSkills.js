@@ -1,30 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { auth, isEmployee } = require('../middleware/auth');
 
-// Middleware pour vérifier si l'employé est authentifié
-const checkEmployeeAuth = (req, res, next) => {
-  // Pour l'instant, permettre l'accès sans authentification pour les tests
-  // TODO: Implémenter l'authentification JWT réelle
-  const employeeId = req.params.employeeId || req.body.employeeId;
-  req.employeeId = employeeId;
-  next();
-  
-  // Version avec authentification (à activer plus tard):
-  /*
-  const employeeId = req.employeeId;
-  if (!employeeId) {
-    return res.status(401).json({ 
-      success: false, 
-      message: 'Employé non authentifié' 
-    });
-  }
-  next();
-  */
-};
-
-// Appliquer le middleware à toutes les routes
-router.use(checkEmployeeAuth);
+// Appliquer auth + isEmployee à toutes les routes
+router.use(auth, isEmployee);
 
 // GET - Récupérer le profil de compétences d'un employé
 router.get('/:employeeId/skills', async (req, res) => {

@@ -891,3 +891,10 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* F-08 : édition dates et heures dans la prévisualisation IA */
+.task-dates-edit { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; background: #f0f9ff; padding: 8px; border-radius: 6px; }
+.date-field { display: flex; flex-direction: column; gap: 2px; }
+.date-field label { font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; }
+.date-input-sm { border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; font-size: 12px; width: 120px; }
+.date-input-sm[type="number"] { width: 70px; }

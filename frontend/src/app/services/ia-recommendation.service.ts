@@ -2,9 +2,10 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
-import { 
-  EmployeeSkillsProfile, 
-  TaskWithRequirements, 
+import { environment } from '../../environments/environment';
+import {
+  EmployeeSkillsProfile,
+  TaskWithRequirements,
   EmployeeMatch,
   TaskRequirement,
   ProjectSimulation,
@@ -17,8 +18,8 @@ import {
   providedIn: 'root'
 })
 export class IARecommendationService {
-  private apiUrl = 'http://localhost:3001/api/manager';
-  private iaApiUrl = 'http://localhost:3001/api/ia';
+  private apiUrl = `${environment.apiUrl}/manager`;
+  private iaApiUrl = `${environment.apiUrl}/ia`;
 
   constructor(private http: HttpClient) {}
 

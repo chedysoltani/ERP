@@ -12,9 +12,10 @@ import { EmployeeTasksComponent } from './employee-tasks.component';
 import { EmployeeTimesheetComponent } from './employee-timesheet.component';
 import { SkillsProfileComponent } from './skills-profile.component';
 import { EmployeePointageComponent } from './employee-pointage.component';
+import { EmployeeHoursFormComponent } from './employee-hours-form.component';
 import { ToastService } from '../../services/toast.service';
 
-export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents' | 'competences' | 'pointage';
+export type SectionId = 'dashboard' | 'taches' | 'projets' | 'timesheet' | 'reunions' | 'documents' | 'competences' | 'pointage';
 
 interface DisplayTask {
   id: number;
@@ -54,7 +55,7 @@ interface DisplayTimesheet {
   templateUrl: './employee-dashboard.component.html',
   styleUrls: ['./employee-dashboard.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, EmployeeTasksComponent, EmployeeTimesheetComponent, SkillsProfileComponent, EmployeePointageComponent]
+  imports: [CommonModule, FormsModule, EmployeeTasksComponent, EmployeeTimesheetComponent, SkillsProfileComponent, EmployeePointageComponent, EmployeeHoursFormComponent]
 })
 export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
@@ -74,6 +75,7 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
 
   taskNotificationCount = 0;
   showNotifDropdown = false;
+  showHoursForm = false;
   notifications: Array<{
     id: number; task_id: number; type: string;
     message: string; is_read: boolean; created_at: string; timeAgo: string;
@@ -151,6 +153,9 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     this.loadTimesheets();
 
     this.loadNotifications();
+
+    // Charger les projets de l'employé
+    this.loadMyProjects();
   }
 
   loadNotifications(): void {
@@ -349,7 +354,7 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   loadMeetingsFromDatabase() {
     if (!this.currentEmployee) return;
 
-    this.managerAuthService.getEmployeeMeetings(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.employeeService.getEmployeeMeetings(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response: any) => {
         const meetings = response.data || response;
         this.myMeetings = meetings.map((meeting: any) => ({
@@ -439,8 +444,12 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     description: ''
   };
 
-  // Liste des projets disponibles
+  // Liste des projets disponibles (pour timesheet form)
   availableProjects: any[] = [];
+
+  // Projets auxquels l'employé est assigné (section dédiée)
+  myProjects: any[] = [];
+  projectsLoading = false;
 
   openCreateTimesheetModal() {
     this.showCreateTimesheetModal = true;
@@ -450,13 +459,67 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
 
   loadAvailableProjects() {
     if (!this.currentEmployee) return;
-    
     this.employeeService.getEmployeeProjects(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         if (response.success) this.availableProjects = response.data;
       },
       error: () => { this.availableProjects = []; }
     });
+  }
+
+  loadMyProjects() {
+    if (!this.currentEmployee) return;
+    this.projectsLoading = true;
+    this.employeeService.getEmployeeProjects(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response) => {
+        this.projectsLoading = false;
+        if (response.success) {
+          this.myProjects = response.data.map((p: any) => ({
+            ...p,
+            statusLabel: this.getProjectStatusLabel(p.status, p.end_date),
+            statusColor: this.getProjectStatusColor(p.status, p.end_date),
+            progressSafe: Math.min(100, Math.max(0, p.progress_tasks ?? p.progress ?? 0)),
+            // s'assurer que les champs enrichis du backend sont disponibles
+            progress_tasks: p.progress_tasks ?? 0,
+            progress_hours: p.progress_hours ?? 0,
+            planned_hours: p.planned_hours ?? 0,
+            consumed_hours: p.consumed_hours ?? 0,
+            total_tasks: p.total_tasks ?? 0,
+            done_tasks: p.done_tasks ?? 0,
+            in_progress_tasks: p.in_progress_tasks ?? 0,
+            todo_tasks: p.todo_tasks ?? 0,
+            late_tasks: p.late_tasks ?? 0,
+            team_members_count: p.team_members_count ?? 0,
+            is_late: p.is_late ?? false,
+            deadline_late: p.deadline_late ?? false,
+            hours_over_budget: p.hours_over_budget ?? false
+          }));
+        }
+      },
+      error: () => { this.projectsLoading = false; this.myProjects = []; }
+    });
+  }
+
+  getProjectStatusLabel(status: string, endDate: string): string {
+    const today = new Date().toISOString().split('T')[0];
+    if (status === 'completed') return 'Terminé';
+    if (status === 'paused') return 'En pause';
+    if (status === 'cancelled') return 'En attente';
+    if (endDate && endDate < today) return 'En retard';
+    return 'En cours';
+  }
+
+  getProjectStatusColor(status: string, endDate: string): string {
+    const label = this.getProjectStatusLabel(status, endDate);
+    const map: Record<string, string> = {
+      'Terminé': '#10b981', 'En cours': '#6366f1',
+      'En retard': '#ef4444', 'En pause': '#94a3b8', 'En attente': '#f59e0b'
+    };
+    return map[label] || '#6366f1';
+  }
+
+  getPriorityLabel(p: string): string {
+    return p === 'high' ? 'Haute' : p === 'low' ? 'Basse' : 'Moyenne';
   }
 
   closeCreateTimesheetModal() {

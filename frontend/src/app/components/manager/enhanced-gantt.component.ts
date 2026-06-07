@@ -1,7 +1,10 @@
 import { Component, OnInit, OnChanges, SimpleChanges, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { AnalyticsService } from '../../services/analytics.service';
 import { TaskEnhancedService } from '../../services/task-enhanced.service';
+import { environment } from '../../../environments/environment';
 interface GanttTask {
   id: number;
   title: string;
@@ -28,7 +31,7 @@ interface GanttViewMode {
 @Component({
   selector: 'app-enhanced-gantt',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="enhanced-gantt-container">
       <div class="gantt-header">
@@ -139,7 +142,7 @@ interface GanttViewMode {
               </div>
             </div>
             <div class="timeline-bar-container">
-              <div 
+              <div
                 class="timeline-bar"
                 [style.left.%]="getTaskLeftPosition(task)"
                 [style.width.%]="getTaskWidth(task)"
@@ -147,7 +150,9 @@ interface GanttViewMode {
                 [class.blocked]="task.is_blocked"
                 [draggable]="true"
                 (dragstart)="onDragStart($event, task)"
-                (dragend)="onDragEnd($event)">
+                (dragend)="onDragEnd($event)"
+                (dblclick)="openDrawer(task)"
+                title="Double-clic pour modifier">
                 <div class="bar-progress" [style.width.%]="task.progress"></div>
                 <div class="bar-label">{{ task.title }}</div>
               </div>
@@ -183,6 +188,57 @@ interface GanttViewMode {
           <span class="legend-color blocked"></span>
           <span>Bloquée</span>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Drawer édition inline (F-05) ── -->
+    <div class="gantt-drawer-overlay" *ngIf="drawerOpen" (click)="closeDrawer()"></div>
+    <div class="gantt-drawer" [class.open]="drawerOpen" *ngIf="drawerTask">
+      <div class="drawer-header">
+        <span class="drawer-title">Modifier la tâche</span>
+        <button class="drawer-close" (click)="closeDrawer()"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-field">
+          <label>Titre</label>
+          <input type="text" [(ngModel)]="drawerTask.title" class="drawer-input" />
+        </div>
+        <div class="drawer-field">
+          <label>Date début</label>
+          <input type="date" [(ngModel)]="drawerTask.start_date" class="drawer-input" />
+        </div>
+        <div class="drawer-field">
+          <label>Date fin</label>
+          <input type="date" [(ngModel)]="drawerTask.end_date" class="drawer-input" />
+        </div>
+        <div class="drawer-field">
+          <label>Heures estimées</label>
+          <input type="number" [(ngModel)]="drawerTask.estimated_hours" min="0" step="0.5" class="drawer-input" />
+        </div>
+        <div class="drawer-field">
+          <label>État</label>
+          <select [(ngModel)]="drawerTask.status" class="drawer-input">
+            <option value="todo">À faire</option>
+            <option value="in_progress">En cours</option>
+            <option value="done">Terminé</option>
+            <option value="cancelled">Annulé</option>
+          </select>
+        </div>
+        <div class="drawer-field">
+          <label>Priorité</label>
+          <select [(ngModel)]="drawerTask.priority" class="drawer-input">
+            <option value="low">Basse</option>
+            <option value="medium">Moyenne</option>
+            <option value="high">Haute</option>
+          </select>
+        </div>
+        <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
+      </div>
+      <div class="drawer-footer">
+        <button class="drawer-btn-cancel" (click)="closeDrawer()">Annuler</button>
+        <button class="drawer-btn-save" (click)="saveDrawer()" [disabled]="drawerSaving">
+          {{ drawerSaving ? 'Enregistrement…' : 'Enregistrer' }}
+        </button>
       </div>
     </div>
   `,
@@ -612,6 +668,26 @@ interface GanttViewMode {
     .legend-color.status-in_progress { background: #ff9800; }
     .legend-color.status-done { background: #4caf50; }
     .legend-color.blocked { background: #ff9800; opacity: 0.6; }
+    /* Drawer (F-05) */
+    .gantt-drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.2); z-index: 100; }
+    .gantt-drawer { position: fixed; top: 0; right: -420px; width: 400px; height: 100vh; background: #fff;
+      box-shadow: -4px 0 20px rgba(0,0,0,.15); z-index: 101; transition: right .3s ease;
+      display: flex; flex-direction: column; }
+    .gantt-drawer.open { right: 0; }
+    .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 1.2rem 1.5rem;
+      border-bottom: 1px solid #e5e7eb; }
+    .drawer-title { font-weight: 700; font-size: 1rem; }
+    .drawer-close { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #6b7280; }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .drawer-field label { display: block; font-size: .82rem; font-weight: 600; color: #374151; margin-bottom: .3rem; }
+    .drawer-input { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: .45rem .7rem; font-size: .9rem; box-sizing: border-box; }
+    .drawer-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+    .drawer-error { color: #dc2626; font-size: .82rem; padding: .4rem; background: #fef2f2; border-radius: 4px; }
+    .drawer-footer { padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb; display: flex; gap: .75rem; justify-content: flex-end; }
+    .drawer-btn-cancel { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: .45rem 1rem; cursor: pointer; }
+    .drawer-btn-save { background: #3b82f6; color: #fff; border: none; border-radius: 6px; padding: .45rem 1.2rem; cursor: pointer; }
+    .drawer-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+    .timeline-bar { cursor: pointer; }
   `]
 })
 export class EnhancedGanttComponent implements OnInit, OnChanges {
@@ -639,9 +715,21 @@ export class EnhancedGanttComponent implements OnInit, OnChanges {
   dependencyAlerts: any[] = [];
   dependencyLinkPaths: { d: string }[] = [];
 
+  // Drawer (F-05)
+  drawerOpen = false;
+  drawerTask: any = null;
+  drawerSaving = false;
+  drawerError = '';
+
+  private get authHeaders(): HttpHeaders {
+    const token = localStorage.getItem('managerToken') || localStorage.getItem('employeeToken') || '';
+    return new HttpHeaders({ Authorization: `Bearer ${token}` });
+  }
+
   constructor(
     private analyticsService: AnalyticsService,
-    private taskEnhancedService: TaskEnhancedService
+    private taskEnhancedService: TaskEnhancedService,
+    private http: HttpClient
   ) { }
 
   get projectProgressDisplay(): number {
@@ -871,6 +959,57 @@ export class EnhancedGanttComponent implements OnInit, OnChanges {
   changeView(view: 'day' | 'week' | 'month') {
     this.currentView = view;
     this.generateTimeline();
+  }
+
+  // ── Drawer methods (F-05) ────────────────────────────────────────────────
+  openDrawer(task: GanttTask): void {
+    this.drawerTask = { ...task };
+    this.drawerError = '';
+    this.drawerOpen = true;
+  }
+
+  closeDrawer(): void {
+    this.drawerOpen = false;
+    this.drawerTask = null;
+    this.drawerError = '';
+  }
+
+  saveDrawer(): void {
+    if (!this.drawerTask) return;
+    const { start_date, end_date, estimated_hours } = this.drawerTask;
+    if (end_date && start_date && end_date < start_date) {
+      this.drawerError = 'La date de fin doit être >= la date de début.';
+      return;
+    }
+    if (estimated_hours <= 0) {
+      this.drawerError = 'Les heures estimées doivent être > 0.';
+      return;
+    }
+    this.drawerSaving = true;
+    this.drawerError = '';
+    this.http.put<any>(
+      `${environment.apiUrl}/tasks/${this.drawerTask.id}`,
+      {
+        title: this.drawerTask.title,
+        start_date: this.drawerTask.start_date,
+        end_date: this.drawerTask.end_date,
+        due_date: this.drawerTask.end_date,
+        estimated_hours: this.drawerTask.estimated_hours,
+        status: this.drawerTask.status,
+        priority: this.drawerTask.priority
+      },
+      { headers: this.authHeaders }
+    ).subscribe({
+      next: () => {
+        this.drawerSaving = false;
+        this.closeDrawer();
+        this.loadGanttData();
+      },
+      error: (err) => {
+        this.drawerSaving = false;
+        this.drawerError = err?.error?.message || 'Erreur lors de la sauvegarde.';
+      }
+    });
   }
 
   dependencyTypeShort(type: string): string {

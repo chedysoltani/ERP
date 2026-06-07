@@ -7,6 +7,7 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { GanttPageComponent } from './components/manager/gantt-page.component';
 import { HttpErrorInterceptor } from './interceptors/http-error.interceptor';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 import { ToastContainerComponent } from './components/shared/toast-container.component';
 
 @NgModule({
@@ -23,6 +24,11 @@ import { ToastContainerComponent } from './components/shared/toast-container.com
     ToastContainerComponent
   ],
   providers: [
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: AuthInterceptor,
+      multi: true
+    },
     {
       provide: HTTP_INTERCEPTORS,
       useClass: HttpErrorInterceptor,

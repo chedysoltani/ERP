@@ -1,10 +1,20 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { AttendanceService } from '../../services/attendance.service';
 import { ToastService } from '../../services/toast.service';
+
+interface TaskEntry {
+  task_id: number;
+  task_title: string;
+  project_name: string;
+  hours: number;
+  comment: string | null;
+}
 
 interface AttendanceRecord {
   employee_id: number;
@@ -17,6 +27,10 @@ interface AttendanceRecord {
   total_hours: number;
   manager_validated: boolean;
   record_id: number | null;
+  // F-10 : champs enrichis avec heures tâches
+  task_entries?: TaskEntry[];
+  total_task_hours?: number;
+  alerte_depassement?: boolean;
 }
 
 interface LeaveRequest {
@@ -45,7 +59,7 @@ interface MonthlyStat {
 @Component({
   selector: 'app-manager-attendance',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, HttpClientModule],
   providers: [DatePipe],
   template: `
 <div class="attendance-manager">
@@ -129,9 +143,9 @@ interface MonthlyStat {
         <thead>
           <tr>
             <th>Employé</th>
-            <th>Arrivée</th>
-            <th>Départ</th>
-            <th>Heures</th>
+            <th>Début</th>
+            <th>Fin</th>
+            <th>Durée totale</th>
             <th>Retard</th>
             <th>Statut</th>
             <th>Validé</th>
@@ -139,34 +153,78 @@ interface MonthlyStat {
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let rec of teamRecords" [class]="'row-' + rec.status">
-            <td class="emp-name">{{ rec.employee_name }}</td>
-            <td>{{ rec.check_in_time ? (rec.check_in_time | slice:11:16) : '—' }}</td>
-            <td>{{ rec.check_out_time ? (rec.check_out_time | slice:11:16) : '—' }}</td>
-            <td>{{ rec.total_hours ? (+rec.total_hours).toFixed(1) + 'h' : '—' }}</td>
-            <td [class.text-orange]="rec.late_minutes > 0">
-              {{ rec.late_minutes > 0 ? rec.late_minutes + ' min' : '—' }}
-            </td>
-            <td>
-              <span class="status-badge" [class]="'status-' + rec.status">
-                {{ statusLabel(rec.status) }}
-              </span>
-            </td>
-            <td>
-              <i class="bi" [class.bi-check-circle-fill]="rec.manager_validated" [class.bi-circle]="!rec.manager_validated"
-                 [class.text-green]="rec.manager_validated" [class.text-gray]="!rec.manager_validated"></i>
-            </td>
-            <td class="actions-cell">
-              <button *ngIf="rec.record_id && !rec.manager_validated"
-                class="btn-sm btn-validate" (click)="openValidate(rec)" title="Valider">
-                <i class="bi bi-check-lg"></i>
-              </button>
-              <button *ngIf="rec.record_id && rec.check_in_time"
-                class="btn-sm btn-correct" (click)="openCorrect(rec)" title="Corriger">
-                <i class="bi bi-pencil"></i>
-              </button>
-            </td>
-          </tr>
+          <ng-container *ngFor="let rec of teamRecords">
+            <!-- Ligne principale expandable (F-10) -->
+            <tr [class]="'row-' + rec.status" class="main-row" (click)="toggleExpand(rec)">
+              <td class="emp-name">
+                <i class="bi" [ngClass]="expandedRows.has(rec.employee_id) ? 'bi-chevron-down' : 'bi-chevron-right'"
+                   style="margin-right:6px;font-size:.75rem;"></i>
+                {{ rec.employee_name }}
+              </td>
+              <td>{{ rec.check_in_time ? (rec.check_in_time | slice:11:16) : '—' }}</td>
+              <td>{{ rec.check_out_time ? (rec.check_out_time | slice:11:16) : '—' }}</td>
+              <td>{{ rec.total_hours ? (+rec.total_hours).toFixed(1) + 'h' : '—' }}</td>
+              <td [class.text-orange]="rec.late_minutes > 0">
+                {{ rec.late_minutes > 0 ? rec.late_minutes + ' min' : '—' }}
+              </td>
+              <td>
+                <span class="status-badge" [class]="'status-' + rec.status">
+                  {{ statusLabel(rec.status) }}
+                </span>
+              </td>
+              <td>
+                <i class="bi" [class.bi-check-circle-fill]="rec.manager_validated" [class.bi-circle]="!rec.manager_validated"
+                   [class.text-green]="rec.manager_validated" [class.text-gray]="!rec.manager_validated"></i>
+              </td>
+              <td class="actions-cell">
+                <button *ngIf="rec.record_id && !rec.manager_validated"
+                  class="btn-sm btn-validate" (click)="$event.stopPropagation(); openValidate(rec)" title="Valider">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+                <button *ngIf="rec.record_id && rec.check_in_time"
+                  class="btn-sm btn-correct" (click)="$event.stopPropagation(); openCorrect(rec)" title="Corriger">
+                  <i class="bi bi-pencil"></i>
+                </button>
+              </td>
+            </tr>
+            <!-- Ligne détail tâches (F-10) -->
+            <tr *ngIf="expandedRows.has(rec.employee_id)" class="detail-row">
+              <td colspan="8">
+                <div class="task-detail-panel">
+                  <div *ngIf="(rec.task_entries?.length ?? 0) === 0" class="no-task-entries">
+                    Aucune heure déclarée sur des tâches ce jour.
+                  </div>
+                  <table *ngIf="(rec.task_entries?.length ?? 0) > 0" class="task-entries-table">
+                    <thead>
+                      <tr>
+                        <th>Tâche</th>
+                        <th>Projet</th>
+                        <th>Heures déclarées</th>
+                        <th>Commentaire</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let entry of rec.task_entries">
+                        <td>{{ entry.task_title }}</td>
+                        <td>{{ entry.project_name }}</td>
+                        <td>{{ entry.hours }}h</td>
+                        <td>{{ entry.comment || '—' }}</td>
+                      </tr>
+                      <tr class="total-row" *ngIf="(rec.task_entries?.length ?? 0) > 1">
+                        <td colspan="2"><strong>Total tâches</strong></td>
+                        <td><strong>{{ rec.total_task_hours }}h</strong></td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="alert-depassement" *ngIf="rec.alerte_depassement">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    Alerte : total heures tâches ({{ rec.total_task_hours }}h) > durée présence ({{ (+rec.total_hours).toFixed(1) }}h)
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </ng-container>
         </tbody>
       </table>
     </div>
@@ -636,6 +694,16 @@ interface MonthlyStat {
     }
     .btn-confirm:hover { background: #2563eb; }
     .spin { animation: spin .8s linear infinite; }
+    /* F-10 detail rows */
+    .main-row { cursor: pointer; }
+    .detail-row td { padding: 0 !important; }
+    .task-detail-panel { background: #0f172a; padding: 12px 24px; border-left: 3px solid #3b82f6; }
+    .no-task-entries { color: #64748b; font-size: 13px; padding: 8px 0; }
+    .task-entries-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .task-entries-table th, .task-entries-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #1e293b; color: #e2e8f0; }
+    .task-entries-table th { color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    .total-row td { font-weight: 700; border-top: 1px solid #334155; }
+    .alert-depassement { color: #f59e0b; font-size: 12px; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
   `]
 })
 export class ManagerAttendanceComponent implements OnInit, OnDestroy {
@@ -660,6 +728,16 @@ export class ManagerAttendanceComponent implements OnInit, OnDestroy {
   statsMonth = new Date().getMonth() + 1;
   availableYears = [new Date().getFullYear(), new Date().getFullYear() - 1];
 
+  // F-10 : lignes expandables avec détail heures tâches
+  expandedRows = new Set<number>();
+  toggleExpand(rec: any): void {
+    if (this.expandedRows.has(rec.employee_id)) {
+      this.expandedRows.delete(rec.employee_id);
+    } else {
+      this.expandedRows.add(rec.employee_id);
+    }
+  }
+
   // Modal state
   showValidateModal = false;
   showCorrectModal = false;
@@ -672,9 +750,16 @@ export class ManagerAttendanceComponent implements OnInit, OnDestroy {
   correctNote = '';
   rejectNote = '';
 
+  private get managerId(): number {
+    try {
+      return JSON.parse(localStorage.getItem('currentManager') || '{}').id || 0;
+    } catch { return 0; }
+  }
+
   constructor(
     private attendance: AttendanceService,
-    private toast: ToastService
+    private toast: ToastService,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -689,13 +774,48 @@ export class ManagerAttendanceComponent implements OnInit, OnDestroy {
 
   loadTeam(): void {
     this.loading = true;
+    this.expandedRows.clear();
+    const token = localStorage.getItem('managerToken') || '';
+    const headers = { Authorization: `Bearer ${token}` };
+    const mid = this.managerId;
+
     this.attendance.getTeamAttendance(this.selectedDate).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res) => {
         if (res.success) {
-          this.teamRecords = res.data.employees || [];
+          const baseRecords: any[] = res.data.employees || [];
           this.teamSummary = res.data.summary || null;
+
+          // F-10 : enrichir avec les heures tâches depuis /daily-hours/team
+          if (mid) {
+            this.http.get<any>(
+              `${environment.apiUrl}/daily-hours/team/${mid}?date=${this.selectedDate}`,
+              { headers }
+            ).subscribe({
+              next: (enriched) => {
+                const enrichedMap: Record<number, any> = {};
+                for (const row of (enriched.data || [])) {
+                  enrichedMap[row.emp_id] = row;
+                }
+                this.teamRecords = baseRecords.map((r: any) => ({
+                  ...r,
+                  task_entries: enrichedMap[r.employee_id]?.task_entries || [],
+                  total_task_hours: enrichedMap[r.employee_id]?.total_task_hours || 0,
+                  alerte_depassement: enrichedMap[r.employee_id]?.alerte_depassement || false
+                }));
+                this.loading = false;
+              },
+              error: () => {
+                this.teamRecords = baseRecords.map((r: any) => ({ ...r, task_entries: [], total_task_hours: 0 }));
+                this.loading = false;
+              }
+            });
+          } else {
+            this.teamRecords = baseRecords;
+            this.loading = false;
+          }
+        } else {
+          this.loading = false;
         }
-        this.loading = false;
       },
       error: () => {
         this.toast.error('Erreur lors du chargement des présences');

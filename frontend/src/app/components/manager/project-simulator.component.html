@@ -427,12 +427,32 @@
               </span>
             </div>
             <p class="task-desc">{{ task.description }}</p>
-            <div class="task-meta">
-              <span><i class="bi bi-clock"></i> {{ task.estimatedTime }}</span>
+            <!-- F-08 : dates et heures éditables avant import -->
+            <div class="task-dates-edit">
+              <div class="date-field">
+                <label><i class="bi bi-play-circle"></i> Début</label>
+                <input type="date" [(ngModel)]="task.date_debut"
+                       class="date-input-sm"
+                       [name]="'start_' + task.title" />
+              </div>
+              <div class="date-field">
+                <label><i class="bi bi-stop-circle"></i> Fin</label>
+                <input type="date" [(ngModel)]="task.date_fin"
+                       class="date-input-sm"
+                       [name]="'end_' + task.title" />
+              </div>
+              <div class="date-field">
+                <label><i class="bi bi-clock"></i> Heures est.</label>
+                <input type="number" [(ngModel)]="task.heures_estimees"
+                       class="date-input-sm" min="0.5" step="0.5"
+                       [name]="'hours_' + task.title" />
+              </div>
+            </div>
+            <div class="task-meta" style="margin-top:6px">
               <span><i class="bi bi-person-badge"></i> {{ task.role }}</span>
             </div>
-            <div class="task-deps" *ngIf="task.dependencies?.length > 0">
-              <small><i class="bi bi-link"></i> Dépend de: {{ task.dependencies.join(', ') }}</small>
+            <div class="task-deps" *ngIf="(task.prerequis?.length || task.dependencies?.length) > 0">
+              <small><i class="bi bi-link"></i> Prérequis : {{ (task.prerequis || task.dependencies || []).join(', ') }}</small>
             </div>
           </div>
         </div>
