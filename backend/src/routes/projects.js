@@ -79,7 +79,12 @@ async function enrichProject(project) {
      ) ea`,
     [project.id, project.id]
   );
-  const team_members_count = parseInt(membersRow?.cnt || 0);
+  // Membres depuis les tâches, sinon depuis la chaîne team du projet
+  const countFromTasks = parseInt(membersRow?.cnt || 0);
+  const countFromTeamStr = project.team
+    ? project.team.split(',').map(s => s.trim()).filter(s => s.length > 0).length
+    : 0;
+  const team_members_count = countFromTasks || countFromTeamStr;
 
   // ── Progression réelle par tâche (heures travaillées / heures estimées) ──
   let sessMapE = {}, dailyMapE = {};

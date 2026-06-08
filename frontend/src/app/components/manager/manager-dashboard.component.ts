@@ -165,7 +165,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
 
   newProject = {
     name: '', description: '', team: '', priority: 'medium',
-    startDate: '', endDate: '', budget: 0,
+    startDate: '', endDate: '', budget: 0, planned_hours: 0,
     team_member_ids: [] as number[]
   };
 
@@ -664,7 +664,7 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
   }
 
   resetProjectForm(): void {
-    this.newProject = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0, team_member_ids: [] };
+    this.newProject = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0, planned_hours: 0, team_member_ids: [] };
     this.showNewProjectTeamDropdown = false;
   }
 
@@ -761,7 +761,8 @@ export class ManagerDashboardComponent implements OnInit, OnDestroy {
       priority: this.newProject.priority,
       startDate: this.newProject.startDate,
       endDate: this.newProject.endDate,
-      budget: this.newProject.budget
+      budget: this.newProject.budget,
+      planned_hours: this.newProject.planned_hours || 0
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({

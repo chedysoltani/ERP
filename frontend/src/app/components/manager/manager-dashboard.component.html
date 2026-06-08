@@ -1282,6 +1282,19 @@
               class="form-input">
           </div>
 
+          <div class="form-group">
+            <label for="projectPlannedHours">Heures planifiées</label>
+            <input
+              type="number"
+              id="projectPlannedHours"
+              name="projectPlannedHours"
+              [(ngModel)]="newProject.planned_hours"
+              placeholder="0"
+              min="0"
+              step="1"
+              class="form-input">
+          </div>
+
           <div class="form-actions">
             <button type="button" class="btn-secondary" (click)="closeCreateProjectModal()">
               Annuler
