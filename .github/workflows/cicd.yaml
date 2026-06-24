@@ -61,8 +61,7 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.sha_short }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
   # ── Job 2 : Copy config files + restart containers on VPS ─────────────────
   deploy:
